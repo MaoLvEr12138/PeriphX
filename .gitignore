@@ -1,0 +1,163 @@
+# =========================================================
+
+# Python
+
+# =========================================================
+
+**pycache**/
+*.py[cod]
+*$py.class
+
+# Virtual Environment
+
+.venv/
+venv/
+env/
+
+# Packaging
+
+*.egg-info/
+build/
+dist/
+pip-wheel-metadata/
+
+# Test & Coverage
+
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Type Checker
+
+.mypy_cache/
+.pyre/
+.ruff_cache/
+
+# =========================================================
+
+# IDE
+
+# =========================================================
+
+.idea/
+.vscode/
+
+# =========================================================
+
+# Operating System
+
+# =========================================================
+
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# =========================================================
+
+# Verilog / FPGA
+
+# =========================================================
+
+# General build outputs
+
+out/
+output/
+generated/
+
+# Gowin
+
+impl/
+temp/
+*.fs
+*.pnr
+*.log
+*.html
+
+# Vivado
+
+.cache/
+.hw/
+.ip_user_files/
+.sim/
+.xpr.user
+*.jou
+*.str
+
+# Quartus
+
+db/
+incremental_db/
+*.qws
+
+# Radiant / Diamond
+
+lse/
+sbt/
+*.tcl.bak
+
+# Simulation
+
+*.vcd
+*.wlf
+*.fst
+*.ghw
+
+# =========================================================
+
+# Generated HDL
+
+# =========================================================
+
+generated_hdl/
+
+# =========================================================
+
+# Generated SDK
+
+# =========================================================
+
+generated_sdk/
+
+# =========================================================
+
+# C / C++
+
+# =========================================================
+
+*.o
+*.obj
+*.a
+*.lib
+*.so
+*.dll
+*.exe
+
+# CMake
+
+cmake-build-*/
+CMakeFiles/
+CMakeCache.txt
+compile_commands.json
+
+# =========================================================
+
+# PeriphX Build Output
+
+# =========================================================
+
+build/
+
+# User generated project artifacts
+
+projects/*/build/
+projects/*/generated/
+
+# =========================================================
+
+# Logs
+
+# =========================================================
+
+*.log
+*.tmp
+*.bak
