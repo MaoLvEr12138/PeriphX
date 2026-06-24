@@ -1,0 +1,34 @@
+[English](https://chatgpt.com/c/README.md) | [简体中文](https://chatgpt.com/c/README_zh_CN.md)
+
+# PeriphX
+
+**面向 MCU 开发者的可配置 FPGA 外设平台。**
+
+PeriphX 是一个开源项目，目标是让 MCU 开发者能够方便地使用 FPGA 构建可配置外设。
+
+项目的长期愿景是：开发者只需通过配置文件描述所需的外设或硬件加速器，即可自动生成 FPGA Bitstream 以及对应的 MCU SDK，从而让 FPGA 更像一种“可配置超级外设”，而不是独立的开发领域。
+
+未来计划支持的组件包括：
+
+- UART
+- SPI
+- I2C
+- PWM
+- GPIO
+- 定时器
+- DSP 加速器
+- 自定义硬件模块
+
+## 当前状态
+
+⚠️ PeriphX 目前处于非常早期的开发阶段。
+
+项目架构、配置格式、组件模型以及构建系统均在设计和验证过程中，当前内容不应被视为稳定接口。
+
+## 参与贡献
+
+欢迎任何形式的贡献、建议和技术交流。
+
+如果你希望参与项目开发，请联系：
+
+**[ghz2985715538@gmail.com](mailto:ghz2985715538@gmail.com)**
