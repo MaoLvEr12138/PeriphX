@@ -72,6 +72,8 @@ temp/
 *.pnr
 *.log
 *.html
+*.qdz
+*.run
 
 # Vivado
 

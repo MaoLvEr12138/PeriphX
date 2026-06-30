@@ -6,6 +6,9 @@ config:
 
     family: gowin
 
+  # EDA工具目录
+    EDA_path: ""
+
     device: gw1nr-9
 
   clock:
