@@ -1,0 +1,29 @@
+component: uart
+
+services:
+  - name: set_baudrate
+    code: 0x01
+    type: u32
+    access: input
+
+  - name: power_button
+    code: 0x02
+    type: bool
+    access: input
+
+  - name: transmit
+    code: 0x03
+    type: u8
+    access: input
+
+  - name: receive
+    code: 0x04
+    type: u8
+    access: output
+
+events:
+  - name: rx_ready
+    code: 0x01
+
+  - name: tx_done
+    code: 0x02

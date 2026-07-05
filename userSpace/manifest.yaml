@@ -3,54 +3,43 @@ manifest_version: 1.0
 config:
 
   fpga:
+    # 品牌厂商
+    brand: "Altera"
 
-    family: gowin
+    # 芯片系列
+    family: "Cyclone IV E"
 
-  # EDA工具目录
-    EDA_path: ""
+    # 芯片型号
+    device: "EP4CE6E22C8"
 
-    device: gw1nr-9
+    # TCL工具目录
+    EDA_path: "D:/Quarters13.0.1/quartus/bin64/quartus_sh.exe"
 
   clock:
+    # 输入时钟频率
+    input_freq: 50_000_000
 
-    input_freq: 27_000_000
-
-    system_freq: 108_000_000
+    # 输入时钟引脚
+    input_pin: PIN_25
+  
+  rst:
+    # 复位信号输入引脚（低电平有效）
+    input_pin: PIN_88
 
 components:
 
   - type: uart
 
-    name: debug_uart
+    name: uart1
 
     parameters:
 
       baudrate: 115200
 
-      fifo_depth: 128
+      oversample: 16
 
     pins:
 
-      tx: IO10
+      tx: PIN_10
 
-      rx: IO11
-
-  - type: spi
-
-    name: sensor_spi
-
-    parameters:
-
-      mode: 0
-
-      frequency: 1000000
-
-    pins:
-
-      sclk: IO20
-
-      mosi: IO21
-
-      miso: IO22
-
-      cs: IO23
+      rx: PIN_23
