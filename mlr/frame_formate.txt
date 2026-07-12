@@ -1,17 +1,7 @@
-mcu -> fpga
+mcu -> fpga  && fpga -> mcu
 {
     u8 head_magic: 0x55,
-    u16 des_server_id,
-    u8 param_len,
-    u8[param_len] params,
-    u8 tail_magic: 0x99
-}
-
-fpga -> mcu
-{
-    u8 head_magic: 0x55,
-    u16 src_server_id,
-    u8 payload_len,
-    u8[payload_len] payload,
-    u8 tail_magic: 0x99
+    u16 server_id,
+    u8 msg_type,        // 0x00:request , 0x01:response , 0x02:event , 0x03:error 
+    u32 payload         // payload长度和格式是约定好的,不需要len参数
 }
