@@ -1,0 +1,17 @@
+mcu -> fpga
+{
+    u8 head_magic: 0x55,
+    u16 des_server_id,
+    u8 param_len,
+    u8[param_len] params,
+    u8 tail_magic: 0x99
+}
+
+fpga -> mcu
+{
+    u8 head_magic: 0x55,
+    u16 src_server_id,
+    u8 payload_len,
+    u8[payload_len] payload,
+    u8 tail_magic: 0x99
+}

@@ -26,6 +26,17 @@ config:
     # 复位信号输入引脚（低电平有效）
     input_pin: PIN_88
 
+  spi:
+    # fpga需要通过spi与mcu交互,请在此设置fpga的spi相关引脚
+    spi_clk_pin: 
+
+    spi_cs_pin: 
+
+    spi_mosi_pin: 
+
+    spi_miso_pin: 
+
+
 components:
 
   - type: pwm_led
