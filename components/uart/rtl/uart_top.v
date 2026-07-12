@@ -11,7 +11,7 @@ parameter	CLK_FREQ=50_000_000;
  
 wire uart_en_w;
 wire [7:0] uart_data_w; 
- 
+
 
 uart_tx#(
 	.BPS		    (UART_BPS),

@@ -28,18 +28,23 @@ config:
 
 components:
 
-  - type: uart
+  - type: pwm_led
 
-    name: uart1
+    name: pwm_led1
 
     parameters:
 
-      baudrate: 115200
+    pins:
 
-      oversample: 16
+      led_pwm: PIN_1
+
+    
+  - type: pwm_led
+
+    name: pwm_led2
+
+    parameters:
 
     pins:
 
-      tx: PIN_10
-
-      rx: PIN_23
+      led_pwm: PIN_2

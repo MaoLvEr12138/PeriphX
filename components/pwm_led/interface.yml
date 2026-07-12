@@ -1,0 +1,12 @@
+component: pwm_led
+
+services:
+  - name: set_sys_cnt_prds
+    type: u32
+    access: input
+    description: "设置pwm周期长度"
+
+  - name: set_sys_cnt_duty
+    type: u32
+    access: input
+    description: "设置周期内高电平占比"
