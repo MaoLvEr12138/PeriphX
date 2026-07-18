@@ -4,7 +4,7 @@
 
 # =========================================================
 
-**pycache**/
+__pycache__/
 *.py[cod]
 *$py.class
 
@@ -148,6 +148,13 @@ compile_commands.json
 # =========================================================
 
 build/
+.build/
+_veri_*/
+_gtest*
+_tb_spi_slave_tmp.cpp
+mlr/__pycache__/
+userSpace/dist/
+*.pyc
 
 # User generated project artifacts
 
