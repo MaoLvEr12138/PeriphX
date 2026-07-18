@@ -1,3 +1,6 @@
+/* verilator lint_off UNUSED */
+/* verilator lint_off SYNCASYNCNET */
+
 // Byte-oriented SPI Mode 0 slave.
 // Drive spi_* from the external SPI master.
 // Use rx_valid/rx_data to read received bytes in clk domain.
@@ -40,6 +43,8 @@ reg rx_toggle_spi;
 reg [7:0] tx_shift_spi;
 reg [7:0] tx_load_spi;
 reg [2:0] tx_count_spi;
+// Marks the first byte after CS goes low.
+reg tx_first_spi;
 reg tx_req_toggle;
 
 //////////////////////////////////////////////////////
@@ -102,21 +107,28 @@ end
 
 //////////////////////////////////////////////////////
 // TX shift
-//
-// Mode0: change data on falling edge
 //////////////////////////////////////////////////////
 
-always @(negedge spi_clk or posedge spi_cs_n or negedge rst_n)
+always @(negedge spi_clk or negedge spi_cs_n or posedge spi_cs_n or negedge rst_n)
 begin
     if(!rst_n)
     begin
         tx_count_spi <= 3'd7;
         tx_shift_spi  <= 8'h00;
+        tx_first_spi  <= 1'b1;
     end
     else if(spi_cs_n)
     begin
         tx_count_spi <= 3'd7;
         tx_shift_spi  <= tx_load_spi;
+        tx_first_spi  <= 1'b1;
+    end
+    else if(tx_first_spi)
+    begin
+        // Preload the first byte before the first data edge.
+        tx_count_spi <= 3'd7;
+        tx_shift_spi  <= tx_load_spi;
+        tx_first_spi  <= 1'b0;
     end
     else
     begin
@@ -124,6 +136,7 @@ begin
         begin
             tx_count_spi <= 3'd7;
             tx_shift_spi <= tx_load_spi;
+            tx_first_spi <= 1'b0;
         end
         else
         begin
@@ -132,6 +145,7 @@ begin
                 tx_shift_spi[6:0],
                 1'b0
             };
+            tx_first_spi <= 1'b0;
         end
     end
 end
@@ -246,8 +260,9 @@ begin
     begin
         tx_req_toggle <= 1'b0;
     end
-    else if(tx_count_spi == 0)
+    else if(tx_count_spi == 3'd3)
     begin
+        // Raise a byte-ready pulse before the next byte boundary.
         tx_req_toggle <= ~tx_req_toggle;
     end
 end
