@@ -1,161 +1,207 @@
+from __future__ import annotations
+
 import os
-import sys
-import subprocess
 import shutil
+import subprocess
+import sys
 from pathlib import Path
 
-
-def run_altera_flow(workspace_dir: Path, manifest_data: dict):
-    """
-    Altera 平台全自动编译主控核心
-    """
-    # 1. 从manifest解析参数
-    project_name = "periphx_generated"
-    eda_path, fpga_info, global_pins, components = _parse_manifest(manifest_data)
-    
-    # 2. 生成 Tcl 构建任务单
-    tcl_path = workspace_dir / "run_flow.tcl"
-    _generate_tcl_script(tcl_path, project_name, fpga_info, global_pins, components, workspace_dir)
-    
-    # 3. 拉起 EDA 工具链子进程
-    cmd = [eda_path, "-t", "run_flow.tcl"]
-    process = subprocess.Popen(
-        cmd,
-        cwd=str(workspace_dir),
-        stdout=subprocess.PIPE,
-        stderr=subprocess.STDOUT,
-        text=True,
-        encoding='gbk',
-        errors='ignore'
-    )
-    
-    # 流式输出 Quartus 原始编译日志
-    for line in process.stdout:
-        sys.stdout.write(line)
-    process.wait()
-    
-    # 4. 产物交付与垃圾现场清洗
-    if process.returncode == 0:
-        _deliver_artifacts(workspace_dir, project_name)
-        _clean_workspace(workspace_dir, project_name)
-    else:
-        print(f"\n[Error] FPGA Compilation failed with exit code: {process.returncode}")
+from mlr.codegen import generate_artifacts
+from mlr.project import load_manifest, load_project_spec
 
 
-def _parse_manifest(manifest_data: dict):
-    """
-    解析块：从原始字典提取清晰的硬件配置子集
-    """
-    config = manifest_data.get("config", {})
-    fpga_cfg = config.get("fpga", {})
-    
-    eda_path = fpga_cfg.get("EDA_path")
-    
-    fpga_info = {
-        "family": fpga_cfg.get("family"),
-        "device": fpga_cfg.get("device")
-    }
-    
-    global_pins = {
-        "clk": config.get("clock", {}).get("input_pin"),
-        "rst_n": config.get("rst", {}).get("input_pin")
-    }
-    
-    components = manifest_data.get("components", [])
-    
-    return eda_path, fpga_info, global_pins, components
+PROJECT_NAME = "periphx_generated"
 
 
-def _generate_tcl_script(tcl_path: Path, prj_name: str, fpga: dict, global_pins: dict, components: list, workspace_dir: Path):
-    """
-    构建块：编排纯粹的 Tcl 语法网表及引脚映射清单
-    """
+def build_workspace(workspace_dir: Path, run_quartus: bool = True) -> None:
+    manifest_path = workspace_dir / "manifest.yaml"
+    if not manifest_path.exists():
+        raise FileNotFoundError(f"manifest not found: {manifest_path}")
+
+    manifest = load_manifest(manifest_path)
+    spec = load_project_spec(workspace_dir, manifest)
+
+    repo_root = workspace_dir.parent
+    output_root = repo_root / "tests" / "build" / "mlr"
+    output_root.mkdir(parents=True, exist_ok=True)
+
+    artifacts = generate_artifacts(spec, output_root)
+    print(f"[OK] Generated RTL: {artifacts['rtl']}")
+    print(f"[OK] Generated SDK: {artifacts['sdk_h']}")
+    print(f"[OK] Service map: {artifacts['service_map']}")
+
+    if not run_quartus:
+        print("[INFO] Quartus step skipped by request.")
+        return
+
+    eda_path = spec.fpga.get("EDA_path")
+    if not eda_path:
+        print("[INFO] EDA_path is empty, bitstream build skipped.")
+        return
+
+    eda_exe = Path(str(eda_path))
+    if not eda_exe.exists():
+        print(f"[INFO] Quartus executable not found, bitstream build skipped: {eda_exe}")
+        return
+
+    quartus_dir = output_root / "quartus"
+    quartus_dir.mkdir(parents=True, exist_ok=True)
+    tcl_path = quartus_dir / "run_flow.tcl"
+    _write_quartus_script(spec, artifacts["rtl"], tcl_path, quartus_dir)
+    print("[INFO] Quartus compile started. This step can take several minutes.")
+    _run_quartus(eda_exe, tcl_path, quartus_dir)
+
+
+def run_altera_flow(workspace_dir: Path, manifest_data: dict, run_quartus: bool = True) -> None:
+    """Compatibility wrapper for older entry points."""
+    manifest_path = workspace_dir / "manifest.yaml"
+    spec = load_project_spec(workspace_dir, manifest_data)
+
+    repo_root = workspace_dir.parent
+    output_root = repo_root / "tests" / "build" / "mlr"
+    output_root.mkdir(parents=True, exist_ok=True)
+
+    artifacts = generate_artifacts(spec, output_root)
+    if not run_quartus:
+        print("[INFO] Quartus step skipped by request.")
+        return
+
+    eda_path = spec.fpga.get("EDA_path")
+    if not eda_path or not Path(str(eda_path)).exists():
+        print("[INFO] Quartus executable not found, generation only.")
+        return
+
+    quartus_dir = output_root / "quartus"
+    quartus_dir.mkdir(parents=True, exist_ok=True)
+    tcl_path = quartus_dir / "run_flow.tcl"
+    _write_quartus_script(spec, artifacts["rtl"], tcl_path, quartus_dir)
+    _run_quartus(Path(str(eda_path)), tcl_path, quartus_dir)
+
+
+def _write_quartus_script(spec, generated_rtl: Path, tcl_path: Path, quartus_dir: Path) -> None:
+    repo_root = spec.workspace_dir.parent
+    core_rtl_dir = repo_root / "components" / "core"
+    sdc_path = quartus_dir / f"{PROJECT_NAME}.sdc"
+    _write_quartus_sdc(spec, sdc_path)
+
+    verilog_files = []
+    for rtl_file in sorted(core_rtl_dir.glob("*.v")):
+        verilog_files.append(rtl_file)
+    for component in spec.components:
+        rtl_dir = repo_root / "components" / component.component_type / "rtl"
+        for rtl_file in sorted(rtl_dir.glob("*.v")):
+            verilog_files.append(rtl_file)
+    verilog_files.append(generated_rtl)
+
     tcl_lines = [
         "package require ::quartus::project",
         "package require ::quartus::flow",
-        f"project_new {prj_name} -overwrite",
-        f"set_global_assignment -name FAMILY \"{fpga['family']}\"",
-        f"set_global_assignment -name DEVICE {fpga['device']}",
-        "set_global_assignment -name TOP_LEVEL_ENTITY uart_top",
-        "set_global_assignment -name PROJECT_OUTPUT_DIRECTORY output_files"
+        f"project_new {PROJECT_NAME} -overwrite",
+        f"set_global_assignment -name FAMILY \"{spec.fpga.get('family', '')}\"",
+        f"set_global_assignment -name DEVICE {spec.fpga.get('device', '')}",
+        "set_global_assignment -name TOP_LEVEL_ENTITY periphx_top",
+        "set_global_assignment -name PROJECT_OUTPUT_DIRECTORY output_files",
+        f"set_global_assignment -name SDC_FILE \"{sdc_path.resolve().as_posix()}\"",
+        "set_global_assignment -name TIMEQUEST_REPORT_SCRIPT_INCLUDE_DEFAULT_ANALYSIS OFF",
     ]
-    
-    # 注入基础全局时钟与复位引脚
-    if global_pins["clk"]:
-        tcl_lines.append(f"set_location_assignment {global_pins['clk']} -to sys_clk")
-        tcl_lines.append(f"set_instance_assignment -name IO_STANDARD \"3.3-V LVCMOS\" -to sys_clk")
-        
-    if global_pins["rst_n"]:
-        tcl_lines.append(f"set_location_assignment {global_pins['rst_n']} -to sys_rst_n")
-        tcl_lines.append(f"set_instance_assignment -name IO_STANDARD \"3.3-V LVCMOS\" -to sys_rst_n")
-        
-    # 遍历外设组件，定位 Verilog 源码及引脚
-    repo_root = workspace_dir.parent
-    
-    for comp in components:
-        comp_type = comp.get("type")
-        pins = comp.get("pins", {})
-        
-        # 搜寻对应组件下的所有 .v 源文件
-        rtl_dir = repo_root / "components" / comp_type / "rtl"
-        if rtl_dir.exists():
-            for v_file in rtl_dir.glob("*.v"):
-                clean_path = str(v_file.resolve()).replace('\\', '/')
-                tcl_lines.append(f"set_global_assignment -name VERILOG_FILE \"{clean_path}\"")
-                
-        # 精准对接硬核端口 uart_txd / uart_rxd
-        if comp_type == "uart":
-            if "tx" in pins:
-                tcl_lines.append(f"set_location_assignment {pins['tx']} -to uart_txd")
-                tcl_lines.append(f"set_instance_assignment -name IO_STANDARD \"3.3-V LVCMOS\" -to uart_txd")
-            if "rx" in pins:
-                tcl_lines.append(f"set_location_assignment {pins['rx']} -to uart_rxd")
-                tcl_lines.append(f"set_instance_assignment -name IO_STANDARD \"3.3-V LVCMOS\" -to uart_rxd")
-                
-    # 写入执行流控制
-    tcl_lines.extend([
-        "export_assignments",
-        "if { [catch { execute_flow -compile } res] } {",
-        "    project_close",
-        "    exit 1",
-        "} else {",
-        "    project_close",
-        "    exit 0",
-        "}"
-    ])
-    
-    with open(tcl_path, "w", encoding="utf-8") as f:
-        f.write("\n".join(tcl_lines))
+
+    for verilog_file in verilog_files:
+        tcl_lines.append(
+            f"set_global_assignment -name VERILOG_FILE \"{verilog_file.resolve().as_posix()}\""
+        )
+
+    tcl_lines.extend(_emit_pin_assignments(spec))
+    tcl_lines.extend(
+        [
+            "export_assignments",
+            "if { [catch { execute_flow -compile } res] } {",
+            "    project_close",
+            "    exit 1",
+            "} else {",
+            "    project_close",
+            "    exit 0",
+            "}",
+        ]
+    )
+
+    tcl_path.write_text("\n".join(tcl_lines) + "\n", encoding="utf-8")
 
 
-def _deliver_artifacts(workspace_dir: Path, prj_name: str):
-    """
-    交付块：将生成的编译原件 sof 移送到用户可见的 dist 目录
-    """
-    dist_dir = workspace_dir / "dist"
-    dist_dir.mkdir(exist_ok=True)
-    
-    src_sof = workspace_dir / "output_files" / f"{prj_name}.sof"
-    dest_sof = dist_dir / f"{prj_name}.sof"
-    
+def _write_quartus_sdc(spec, sdc_path: Path) -> None:
+    clock_cfg = spec.config.get("clock", {}) or {}
+    input_freq = clock_cfg.get("input_freq")
+
+    try:
+        freq_hz = float(input_freq)
+    except (TypeError, ValueError):
+        freq_hz = 50_000_000.0
+
+    if freq_hz <= 0:
+        freq_hz = 50_000_000.0
+
+    period_ns = 1_000_000_000.0 / freq_hz
+
+    sdc_lines = [
+        "# Auto-generated by mlr.",
+        f"create_clock -name sys_clk -period {period_ns:.3f} [get_ports {{clk}}]",
+        f"create_clock -name spi_clk -period {period_ns:.3f} [get_ports {{spi_clk}}]",
+        "set_clock_groups -asynchronous -group {sys_clk} -group {spi_clk}",
+        "set_false_path -from [get_ports {rst_n}] -to [all_registers]",
+    ]
+    sdc_path.write_text("\n".join(sdc_lines) + "\n", encoding="utf-8")
+
+
+def _emit_pin_assignments(spec) -> list[str]:
+    lines: list[str] = []
+
+    def add_pin(port: str, pin: str | None) -> None:
+        if not pin:
+            return
+        lines.append(f"set_location_assignment {pin} -to {port}")
+        lines.append(f"set_instance_assignment -name IO_STANDARD \"3.3-V LVCMOS\" -to {port}")
+
+    add_pin("clk", spec.clock_pin)
+    add_pin("rst_n", spec.rst_pin)
+    add_pin("spi_clk", spec.spi_pins.get("spi_clk_pin"))
+    add_pin("spi_cs_n", spec.spi_pins.get("spi_cs_pin"))
+    add_pin("spi_mosi", spec.spi_pins.get("spi_mosi_pin"))
+    add_pin("spi_miso", spec.spi_pins.get("spi_miso_pin"))
+
+    for component in spec.components:
+        for pin_name, port_name in component.pin_port_names.items():
+            add_pin(port_name, component.pins.get(pin_name))
+
+    return lines
+
+
+def _run_quartus(eda_exe: Path, tcl_path: Path, quartus_dir: Path) -> None:
+    process = subprocess.Popen(
+        [str(eda_exe), "-t", str(tcl_path.name)],
+        cwd=str(quartus_dir),
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        text=True,
+        encoding="gbk",
+        errors="ignore",
+    )
+
+    assert process.stdout is not None
+    for line in process.stdout:
+        sys.stdout.write(line)
+    process.wait()
+
+    if process.returncode != 0:
+        print(f"[ERROR] Quartus compile failed with exit code {process.returncode}")
+        return
+
+    dist_dir = quartus_dir.parent / "dist"
+    dist_dir.mkdir(parents=True, exist_ok=True)
+    src_sof = quartus_dir / "output_files" / f"{PROJECT_NAME}.sof"
     if src_sof.exists():
-        shutil.copy(src_sof, dest_sof)
-        print(f"\n[Success] Artifact delivered to: {dest_sof}")
+        shutil.copy(src_sof, dist_dir / f"{PROJECT_NAME}.sof")
+        print(f"[OK] Bitstream copied to {dist_dir / f'{PROJECT_NAME}.sof'}")
 
-
-def _clean_workspace(workspace_dir: Path, prj_name: str):
-    """
-    清洗块：斩断中间垃圾目录和衍生配置文件
-    """
-    garbage_dirs = ["db", "incremental_db", "output_files"]
-    garbage_files = ["run_flow.tcl", f"{prj_name}.qpf", f"{prj_name}.qsf", f"{prj_name}.qws"]
-    
-    for d in garbage_dirs:
-        path = workspace_dir / d
-        if path.exists():
-            shutil.rmtree(path)
-            
-    for f in garbage_files:
-        path = workspace_dir / f
-        if path.exists():
-            os.remove(path)
+    for child_name in ("db", "incremental_db", "output_files"):
+        child = quartus_dir / child_name
+        if child.exists():
+            shutil.rmtree(child)

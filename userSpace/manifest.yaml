@@ -28,13 +28,13 @@ config:
 
   spi:
     # fpga需要通过spi与mcu交互,请在此设置fpga的spi相关引脚
-    spi_clk_pin: 
+    spi_clk_pin: PIN_106
 
-    spi_cs_pin: 
+    spi_cs_pin: PIN_105
 
-    spi_mosi_pin: 
+    spi_mosi_pin: PIN_104
 
-    spi_miso_pin: 
+    spi_miso_pin: PIN_103
 
 
 components:

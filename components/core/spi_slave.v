@@ -41,6 +41,7 @@ reg [7:0] rx_byte_spi;
 reg rx_toggle_spi;
 
 reg [7:0] tx_shift_spi;
+reg [7:0] tx_stage_spi;
 reg [7:0] tx_load_spi;
 reg [2:0] tx_count_spi;
 // Marks the first byte after CS goes low.
@@ -109,33 +110,46 @@ end
 // TX shift
 //////////////////////////////////////////////////////
 
-always @(negedge spi_clk or negedge spi_cs_n or posedge spi_cs_n or negedge rst_n)
+// Keep the TX byte preloaded in the SPI domain and expose the staged byte
+// directly for the first byte so Mode 0 sees a stable MSB on the very first
+// rising SCK edge after CS goes low.
+always @(negedge spi_clk or posedge spi_cs_n or negedge rst_n)
 begin
     if(!rst_n)
     begin
         tx_count_spi <= 3'd7;
         tx_shift_spi  <= 8'h00;
+        tx_stage_spi  <= 8'h00;
         tx_first_spi  <= 1'b1;
     end
     else if(spi_cs_n)
     begin
         tx_count_spi <= 3'd7;
         tx_shift_spi  <= tx_load_spi;
+        tx_stage_spi  <= tx_load_spi;
         tx_first_spi  <= 1'b1;
     end
     else if(tx_first_spi)
     begin
-        // Preload the first byte before the first data edge.
-        tx_count_spi <= 3'd7;
-        tx_shift_spi  <= tx_load_spi;
+        // The first falling edge after CS low consumes bit7 and advances the
+        // shifter to bit6 so the next rising edge sees a clean byte cadence.
+        tx_count_spi <= 3'd6;
+        tx_shift_spi  <= {
+            tx_shift_spi[6:0],
+            1'b0
+        };
+        tx_stage_spi  <= tx_load_spi;
         tx_first_spi  <= 1'b0;
     end
     else
     begin
+        tx_stage_spi <= tx_load_spi;
+
         if(tx_count_spi == 0)
         begin
             tx_count_spi <= 3'd7;
-            tx_shift_spi <= tx_load_spi;
+            // Load the pre-sampled byte from the SPI-domain stage register.
+            tx_shift_spi <= tx_stage_spi;
             tx_first_spi <= 1'b0;
         end
         else
@@ -157,7 +171,7 @@ end
 assign spi_miso =
         spi_cs_n ?
         1'bz :
-        tx_shift_spi[7];
+        (tx_first_spi ? tx_stage_spi[7] : tx_shift_spi[7]);
 
 //////////////////////////////////////////////////////
 // TX byte loading
@@ -260,9 +274,10 @@ begin
     begin
         tx_req_toggle <= 1'b0;
     end
-    else if(tx_count_spi == 3'd3)
+    else if(tx_count_spi == 3'd7)
     begin
-        // Raise a byte-ready pulse before the next byte boundary.
+        // Raise a byte-ready pulse right at the start of a byte so the next
+        // byte gets a full-byte window to settle before the boundary.
         tx_req_toggle <= ~tx_req_toggle;
     end
 end

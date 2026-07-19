@@ -1,9 +1,10 @@
 // Fixed service router.
+// The default build supports 256 slots.
 // Top provides the service ID map.
 // One request buffer and one response buffer.
 module data_router
 #(
-    parameter integer NUM_SLOTS = 2
+    parameter integer NUM_SLOTS = 256
 )
 (
     input  wire                         clk,
@@ -11,6 +12,7 @@ module data_router
 
     // Service ID map, packed as slot0 in the low byte.
     input  wire [NUM_SLOTS*8-1:0]       slot_service_ids,
+    input  wire [NUM_SLOTS-1:0]         slot_service_valid,
 
     // Request from protocol_parse.
     input  wire                         req_valid,
@@ -38,7 +40,11 @@ module data_router
 
     // Debug.
     output wire                        router_busy,
-    output reg                         router_error
+    output reg                         router_error,
+    output reg                         dbg_req_fire,
+    output reg [7:0]                   dbg_req_slot,
+    output reg                         dbg_rsp_fire,
+    output reg [7:0]                   dbg_rsp_slot
 );
 
 function integer clog2;
@@ -88,6 +94,7 @@ begin
     for(idx = 0; idx < NUM_SLOTS; idx = idx + 1)
     begin
         if(!found_match &&
+           slot_service_valid[idx] &&
            req_service_id_r == slot_service_ids[(idx*8) +: 8])
         begin
             found_match = 1'b1;
@@ -134,6 +141,10 @@ begin
         slot_req_msg_type  <= {NUM_SLOTS*4{1'b0}};
         slot_req_payload   <= {NUM_SLOTS*32{1'b0}};
         router_error       <= 1'b0;
+        dbg_req_fire       <= 1'b0;
+        dbg_req_slot       <= 8'h00;
+        dbg_rsp_fire       <= 1'b0;
+        dbg_rsp_slot       <= 8'h00;
     end
     else
     begin
@@ -141,6 +152,10 @@ begin
         slot_req_msg_type <= {NUM_SLOTS*4{1'b0}};
         slot_req_payload  <= {NUM_SLOTS*32{1'b0}};
         router_error      <= 1'b0;
+        dbg_req_fire      <= 1'b0;
+        dbg_req_slot      <= 8'h00;
+        dbg_rsp_fire      <= 1'b0;
+        dbg_rsp_slot      <= 8'h00;
 
         // Queue one request pulse.
         if(req_valid && req_ready)
@@ -165,6 +180,8 @@ begin
             rsp_msg_type_r    <= selected_rsp_msg_type;
             rsp_payload_r     <= selected_rsp_payload;
             req_busy          <= 1'b0;
+            dbg_rsp_fire      <= 1'b1;
+            dbg_rsp_slot      <= active_slot;
         end
 
         // Dispatch a buffered request when the router is idle.
@@ -188,6 +205,8 @@ begin
                 active_slot       <= found_slot;
                 active_service_id <= req_service_id_r;
                 req_pending       <= 1'b0;
+                dbg_req_fire      <= 1'b1;
+                dbg_req_slot      <= found_slot;
             end
             else
             begin

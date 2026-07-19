@@ -34,6 +34,7 @@ module protocol_parse
 );
 
 localparam [2:0] FRAME_LAST = 3'd5;
+localparam [7:0] TURNAROUND_BYTE = 8'hFF;
 
 //////////////////////////////////////////////////////
 // Frame layout
@@ -263,7 +264,8 @@ end
 //////////////////////////////////////////////////////
 
 reg        tx_busy;
-reg [2:0]  tx_index;
+// 0..2 = turnaround, 3..8 = response bytes.
+reg [3:0]  tx_index;
 reg [7:0]  tx_b1;
 reg [7:0]  tx_b2;
 reg [7:0]  tx_b3;
@@ -302,6 +304,11 @@ begin
             if(tx_frame_valid)
             begin
                 // Latch the frame and precompute the CRC nibble.
+                //
+                // The first SPI byte after the request is an intentional
+                // turnaround byte. This keeps the response aligned to a
+                // clean byte boundary after the request frame has fully
+                // drained through the parser/router path.
                 tx_b1 <= tx_payload[31:24];
                 tx_b2 <= tx_payload[23:16];
                 tx_b3 <= tx_payload[15:8];
@@ -309,9 +316,9 @@ begin
                 tx_b5 <= {crc4_frame(tx_server_id, tx_payload, tx_msg_type), tx_msg_type};
 
                 tx_busy      <= 1'b1;
-                tx_index     <= 3'd0;
+                tx_index     <= 4'd0;
                 spi_tx_valid <= 1'b1;
-                spi_tx_data  <= tx_server_id;
+                spi_tx_data  <= TURNAROUND_BYTE;
             end
         end
         else
@@ -321,33 +328,51 @@ begin
             if(spi_tx_ready)
             begin
                 case(tx_index)
-                    3'd0:
+                    4'd0:
                     begin
-                        tx_index    <= 3'd1;
+                        tx_index    <= 4'd1;
+                        spi_tx_data <= TURNAROUND_BYTE;
+                    end
+
+                    4'd1:
+                    begin
+                        tx_index    <= 4'd2;
+                        spi_tx_data <= TURNAROUND_BYTE;
+                    end
+
+                    4'd2:
+                    begin
+                        tx_index    <= 4'd3;
+                        spi_tx_data <= tx_server_id;
+                    end
+
+                    4'd3:
+                    begin
+                        tx_index    <= 4'd4;
                         spi_tx_data <= tx_b1;
                     end
 
-                    3'd1:
+                    4'd4:
                     begin
-                        tx_index    <= 3'd2;
+                        tx_index    <= 4'd5;
                         spi_tx_data <= tx_b2;
                     end
 
-                    3'd2:
+                    4'd5:
                     begin
-                        tx_index    <= 3'd3;
+                        tx_index    <= 4'd6;
                         spi_tx_data <= tx_b3;
                     end
 
-                    3'd3:
+                    4'd6:
                     begin
-                        tx_index    <= 3'd4;
+                        tx_index    <= 4'd7;
                         spi_tx_data <= tx_b4;
                     end
 
-                    3'd4:
+                    4'd7:
                     begin
-                        tx_index    <= 3'd5;
+                        tx_index    <= 4'd8;
                         spi_tx_data <= tx_b5;
                     end
 

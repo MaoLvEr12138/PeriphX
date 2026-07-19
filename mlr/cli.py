@@ -1,31 +1,42 @@
-import typer
-import yaml
+from __future__ import annotations
+
+import argparse
 from pathlib import Path
-from mlr.builder import run_altera_flow
+import sys
 
-app = typer.Typer(help="PeriphX 管理工具 (Mlr)")
+from mlr.builder import build_workspace
 
-def get_userWorkspace() -> Path:
+
+def get_user_workspace() -> Path:
     return Path(__file__).resolve().parent.parent / "userSpace"
 
-@app.command(help="从 userSpace/manifest.yaml 读取配置并拉起编译")
-def build():
-    workspace_dir = get_userWorkspace()
-    manifest_path = workspace_dir / "manifest.yaml"
-    
-    if not manifest_path.exists():
-        typer.echo(f"❌ 错误: 找不到配置文件 {manifest_path}", err=True)
-        raise typer.Exit(code=1)
-        
-    with open(manifest_path, "r", encoding="utf-8") as file:
-        try:
-            data = yaml.safe_load(file)
-        except Exception as e:
-            typer.echo(f"❌ YAML 文件语法解析失败: {e}", err=True)
-            raise typer.Exit(code=1)
-            
-    # 引导进入平台适配编译流
-    run_altera_flow(workspace_dir, data)
+
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(prog="mlr", description="PeriphX build tool")
+    subparsers = parser.add_subparsers(dest="command", required=True)
+
+    build_parser = subparsers.add_parser("build", help="Generate RTL, SDK, and bitstream artifacts.")
+    build_parser.add_argument(
+        "--workspace",
+        type=Path,
+        default=get_user_workspace(),
+        help="Path to the userSpace directory.",
+    )
+    build_parser.add_argument(
+        "--generate-only",
+        action="store_true",
+        help="Generate RTL and SDK only, and skip Quartus compilation.",
+    )
+
+    args = parser.parse_args(argv)
+
+    if args.command == "build":
+        build_workspace(args.workspace, run_quartus=not args.generate_only)
+        return 0
+
+    parser.print_help()
+    return 1
+
 
 if __name__ == "__main__":
-    app()
+    raise SystemExit(main(sys.argv[1:]))
