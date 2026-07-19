@@ -1,6 +1,6 @@
-// Byte-level frame bridge.
-// RX: spi_slave bytes -> frame output.
-// TX: frame input -> spi_slave bytes.
+// Byte-level frame bridge between spi_slave and the service router.
+// RX assembles a fixed 6-byte frame.
+// TX serializes a fixed 6-byte frame with a short alignment window.
 module protocol_parse
 (
     input  wire clk,
@@ -37,7 +37,7 @@ localparam [2:0] FRAME_LAST = 3'd5;
 localparam [7:0] TURNAROUND_BYTE = 8'hFF;
 
 //////////////////////////////////////////////////////
-// Frame layout
+// Fixed frame layout.
 //
 // byte0: server_id
 // byte1: payload[31:24]
@@ -261,10 +261,14 @@ end
 
 //////////////////////////////////////////////////////
 // TX frame serialization
+//
+// The first bytes after a request are alignment bytes. They give the router
+// and component path a byte-wide window to stage the response before the
+// readback bytes begin.
 //////////////////////////////////////////////////////
 
 reg        tx_busy;
-// 0..2 = turnaround, 3..8 = response bytes.
+// 0..2 = alignment bytes, 3..8 = response bytes.
 reg [3:0]  tx_index;
 reg [7:0]  tx_b1;
 reg [7:0]  tx_b2;
@@ -304,11 +308,6 @@ begin
             if(tx_frame_valid)
             begin
                 // Latch the frame and precompute the CRC nibble.
-                //
-                // The first SPI byte after the request is an intentional
-                // turnaround byte. This keeps the response aligned to a
-                // clean byte boundary after the request frame has fully
-                // drained through the parser/router path.
                 tx_b1 <= tx_payload[31:24];
                 tx_b2 <= tx_payload[23:16];
                 tx_b3 <= tx_payload[15:8];

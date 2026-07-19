@@ -1,3 +1,5 @@
+"""Manifest parsing and normalized project specification helpers."""
+
 from __future__ import annotations
 
 from dataclasses import dataclass, field
@@ -23,10 +25,6 @@ def sanitize_identifier(value: str) -> str:
     if cleaned[0].isdigit():
         cleaned = "_" + cleaned
     return cleaned
-
-
-def _to_bool(value: Any) -> bool:
-    return bool(value)
 
 
 @dataclass(slots=True)

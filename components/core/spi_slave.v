@@ -2,9 +2,8 @@
 /* verilator lint_off SYNCASYNCNET */
 
 // Byte-oriented SPI Mode 0 slave.
-// Drive spi_* from the external SPI master.
-// Use rx_valid/rx_data to read received bytes in clk domain.
-// Present tx_valid/tx_data in clk domain before the next frame.
+// RX captures bytes from the external master.
+// TX stages the next byte in the clk domain and shifts it out on SCK.
 module spi_slave
 (
     input  wire clk,
@@ -110,9 +109,9 @@ end
 // TX shift
 //////////////////////////////////////////////////////
 
-// Keep the TX byte preloaded in the SPI domain and expose the staged byte
-// directly for the first byte so Mode 0 sees a stable MSB on the very first
-// rising SCK edge after CS goes low.
+// Keep the next TX byte staged in the SPI domain.
+// The first byte after CS uses the staged byte directly so Mode 0 sees a
+// stable MSB on the first rising SCK edge.
 always @(negedge spi_clk or posedge spi_cs_n or negedge rst_n)
 begin
     if(!rst_n)
@@ -131,8 +130,7 @@ begin
     end
     else if(tx_first_spi)
     begin
-        // The first falling edge after CS low consumes bit7 and advances the
-        // shifter to bit6 so the next rising edge sees a clean byte cadence.
+        // Consume the first byte on the first falling edge after CS low.
         tx_count_spi <= 3'd6;
         tx_shift_spi  <= {
             tx_shift_spi[6:0],
@@ -148,7 +146,7 @@ begin
         if(tx_count_spi == 0)
         begin
             tx_count_spi <= 3'd7;
-            // Load the pre-sampled byte from the SPI-domain stage register.
+            // Reload the staged byte and start the next byte cadence.
             tx_shift_spi <= tx_stage_spi;
             tx_first_spi <= 1'b0;
         end
@@ -261,7 +259,10 @@ begin
 end
 
 //////////////////////////////////////////////////////
-// TX request generation
+// TX request generation.
+//
+// Raise a byte-ready pulse at the start of a byte so the clk-domain bridge
+// has a full byte window to settle the next value before the boundary.
 //////////////////////////////////////////////////////
 
 always @(posedge spi_clk or posedge spi_cs_n or negedge rst_n)
@@ -276,8 +277,6 @@ begin
     end
     else if(tx_count_spi == 3'd7)
     begin
-        // Raise a byte-ready pulse right at the start of a byte so the next
-        // byte gets a full-byte window to settle before the boundary.
         tx_req_toggle <= ~tx_req_toggle;
     end
 end

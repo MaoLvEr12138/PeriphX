@@ -1,6 +1,7 @@
+"""Build orchestration for PeriphX generated artifacts."""
+
 from __future__ import annotations
 
-import os
 import shutil
 import subprocess
 import sys
@@ -13,6 +14,11 @@ from mlr.project import load_manifest, load_project_spec
 PROJECT_NAME = "periphx_generated"
 
 
+def _mlr_output_root(workspace_dir: Path) -> Path:
+    repo_root = workspace_dir.parent
+    return repo_root / "tests" / "build" / "mlr"
+
+
 def build_workspace(workspace_dir: Path, run_quartus: bool = True) -> None:
     manifest_path = workspace_dir / "manifest.yaml"
     if not manifest_path.exists():
@@ -21,8 +27,7 @@ def build_workspace(workspace_dir: Path, run_quartus: bool = True) -> None:
     manifest = load_manifest(manifest_path)
     spec = load_project_spec(workspace_dir, manifest)
 
-    repo_root = workspace_dir.parent
-    output_root = repo_root / "tests" / "build" / "mlr"
+    output_root = _mlr_output_root(workspace_dir)
     output_root.mkdir(parents=True, exist_ok=True)
 
     artifacts = generate_artifacts(spec, output_root)
@@ -54,11 +59,9 @@ def build_workspace(workspace_dir: Path, run_quartus: bool = True) -> None:
 
 def run_altera_flow(workspace_dir: Path, manifest_data: dict, run_quartus: bool = True) -> None:
     """Compatibility wrapper for older entry points."""
-    manifest_path = workspace_dir / "manifest.yaml"
     spec = load_project_spec(workspace_dir, manifest_data)
 
-    repo_root = workspace_dir.parent
-    output_root = repo_root / "tests" / "build" / "mlr"
+    output_root = _mlr_output_root(workspace_dir)
     output_root.mkdir(parents=True, exist_ok=True)
 
     artifacts = generate_artifacts(spec, output_root)

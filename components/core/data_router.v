@@ -1,7 +1,8 @@
 // Fixed service router.
 // The default build supports 256 slots.
-// Top provides the service ID map.
-// One request buffer and one response buffer.
+// Top provides the service-ID map and valid-slot mask.
+// One request buffer and one response buffer keep request/response boundaries
+// clean across the router path.
 module data_router
 #(
     parameter integer NUM_SLOTS = 256

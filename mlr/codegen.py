@@ -1,10 +1,21 @@
+"""Code generation for the PeriphX RTL, SDK, and build metadata."""
+
 from __future__ import annotations
 
 from pathlib import Path
 import json
 from textwrap import dedent
 
-from mlr.project import ComponentSpec, ProjectSpec, ServiceSpec, sanitize_identifier
+from mlr.project import ComponentSpec, ProjectSpec, sanitize_identifier
+
+
+FRAME_LEN = 6
+TURNAROUND_LEN = 3
+TURNAROUND_BYTE = 0xFF
+REQUEST_MSG_TYPE = 0x0
+RESPONSE_MSG_TYPE = 0x1
+EVENT_MSG_TYPE = 0x2
+ERROR_MSG_TYPE = 0x3
 
 
 def generate_artifacts(spec: ProjectSpec, output_root: Path) -> dict[str, Path]:
@@ -85,26 +96,25 @@ def _write_sdk_header(spec: ProjectSpec, path: Path) -> Path:
     lines.append("#include <stddef.h>")
     lines.append("#include <stdint.h>")
     lines.append("")
-    lines.append("#define PERIPHX_FRAME_LEN 6u")
-    lines.append("#define PERIPHX_TURNAROUND_LEN 3u")
+    lines.append(f"#define PERIPHX_FRAME_LEN {FRAME_LEN}u")
+    lines.append(f"#define PERIPHX_TURNAROUND_LEN {TURNAROUND_LEN}u")
     lines.append("#define PERIPHX_TRANSACTION_LEN (PERIPHX_FRAME_LEN + PERIPHX_TURNAROUND_LEN + PERIPHX_FRAME_LEN)")
-    lines.append("#define PERIPHX_MSG_REQUEST 0x0u")
-    lines.append("#define PERIPHX_MSG_RESPONSE 0x1u")
-    lines.append("#define PERIPHX_MSG_EVENT 0x2u")
-    lines.append("#define PERIPHX_MSG_ERROR 0x3u")
+    lines.append(f"#define PERIPHX_MSG_REQUEST {REQUEST_MSG_TYPE:#x}u")
+    lines.append(f"#define PERIPHX_MSG_RESPONSE {RESPONSE_MSG_TYPE:#x}u")
+    lines.append(f"#define PERIPHX_MSG_EVENT {EVENT_MSG_TYPE:#x}u")
+    lines.append(f"#define PERIPHX_MSG_ERROR {ERROR_MSG_TYPE:#x}u")
     lines.append("")
     lines.append("/*")
-    lines.append(" * Temporary bring-up bridge:")
-    lines.append(" * The current FPGA prototype emits the response only after the request")
-    lines.append(" * frame has fully drained through the router path. A three-byte turnaround")
-    lines.append(" * window keeps the response aligned to a clean byte boundary, so the SDK")
-    lines.append(" * keeps CS low and clocks a request window, three turnaround bytes, and a")
-    lines.append(" * readback window in the same SPI transaction.")
-    lines.append(" * Once the hardware contract is frozen, this can be collapsed back to a")
-    lines.append(" * single helper in one place.")
+    lines.append(" * PeriphX transport baseline:")
+    lines.append(" * The current FPGA bridge keeps a short byte-alignment window between the")
+    lines.append(" * request and response halves of a transaction. The SDK therefore keeps")
+    lines.append(" * CS low across a request window, three alignment bytes, and a readback")
+    lines.append(" * window in a single SPI transfer.")
+    lines.append(" * Once the transport contract is simplified, this helper can collapse")
+    lines.append(" * back to a single-phase transfer without changing the public API.")
     lines.append(" */")
     lines.append("#define PERIPHX_DEBUG_DEFERRED_READBACK 1u")
-    lines.append("#define PERIPHX_DEBUG_READBACK_TOKEN 0xFFu")
+    lines.append(f"#define PERIPHX_DEBUG_READBACK_TOKEN 0x{TURNAROUND_BYTE:02X}u")
     lines.append("")
     lines.append("typedef enum {")
     lines.append("    PERIPHX_OK = 0,")
@@ -246,18 +256,17 @@ def _write_sdk_source(spec: ProjectSpec, path: Path) -> Path:
     lines.append("    }")
     lines.append("    #else")
     lines.append("    for(size_t i = 0; i < PERIPHX_TURNAROUND_LEN + PERIPHX_FRAME_LEN; ++i) {")
-    lines.append("        tx_bytes[PERIPHX_FRAME_LEN + i] = 0xFFu;")
+    lines.append(f"        tx_bytes[PERIPHX_FRAME_LEN + i] = 0x{TURNAROUND_BYTE:02X}u;")
     lines.append("    }")
     lines.append("    #endif")
     lines.append("    /*")
-    lines.append("     * One SPI transaction carries the request plus three turnaround bytes")
-    lines.append("     * and then a readback window:")
-    lines.append("     *   - bytes 0..5  : the actual request")
-    lines.append("     *   - bytes 6..8  : turnaround / alignment bytes")
-    lines.append("     *   - bytes 8..13 : the deferred response")
-    lines.append("     * The extra turnaround bytes are intentional during bring-up because the")
-    lines.append("     * FPGA prototype only presents the response after the request frame has")
-    lines.append("     * fully drained through the router path.")
+    lines.append("     * Transaction layout:")
+    lines.append("     *   - bytes 0..5  : request frame")
+    lines.append("     *   - bytes 6..8  : byte-alignment window")
+    lines.append("     *   - bytes 9..14 : readback frame")
+    lines.append("     * The alignment window is part of the current transport contract and")
+    lines.append("     * keeps the response byte boundary stable while the FPGA bridge drains")
+    lines.append("     * the request through parse/router/component logic.")
     lines.append("     */")
     lines.append("    if(transfer_bytes(dev, tx_bytes, rx_bytes, PERIPHX_TRANSACTION_LEN) != PERIPHX_OK) {")
     lines.append("        return PERIPHX_ERR_IO;")

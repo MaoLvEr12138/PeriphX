@@ -1,0 +1,25 @@
+PeriphX frame format
+====================
+
+MOSI and MISO exchange fixed 6-byte frames.
+
+Request / response frame layout:
+
+    byte0: server_id
+    byte1: payload[31:24]
+    byte2: payload[23:16]
+    byte3: payload[15:8]
+    byte4: payload[7:0]
+    byte5: {crc4[7:4], msg_type[3:0]}
+
+Message types:
+
+    0x0: request
+    0x1: response
+    0x2: event
+    0x3: error
+
+CRC:
+
+    CRC4 uses polynomial x^4 + x + 1, MSB-first, seed = 0.
+
