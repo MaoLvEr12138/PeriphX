@@ -1,6 +1,6 @@
 // Fixed service router.
 // The default build supports 256 slots.
-// Top provides the service-ID map and valid-slot mask.
+// Service ID is used directly as the slot index.
 // One request buffer and one response buffer keep request/response boundaries
 // clean across the router path.
 module data_router
@@ -11,8 +11,7 @@ module data_router
     input  wire                         clk,
     input  wire                         rst_n,
 
-    // Service ID map, packed as slot0 in the low byte.
-    input  wire [NUM_SLOTS*8-1:0]       slot_service_ids,
+    // Valid slot mask. req_service_id is used directly as the slot index.
     input  wire [NUM_SLOTS-1:0]         slot_service_valid,
 
     // Request from protocol_parse.
@@ -82,7 +81,6 @@ reg [3:0]               rsp_msg_type_r;
 
 reg found_match;
 reg [SLOT_BITS-1:0] found_slot;
-integer idx;
 
 reg [3:0]  selected_rsp_msg_type;
 reg [31:0] selected_rsp_payload;
@@ -90,17 +88,11 @@ reg [31:0] selected_rsp_payload;
 always @*
 begin
     found_match = 1'b0;
-    found_slot  = {SLOT_BITS{1'b0}};
+    found_slot  = req_service_id_r[SLOT_BITS-1:0];
 
-    for(idx = 0; idx < NUM_SLOTS; idx = idx + 1)
+    if(req_service_id_r < NUM_SLOTS)
     begin
-        if(!found_match &&
-           slot_service_valid[idx] &&
-           req_service_id_r == slot_service_ids[(idx*8) +: 8])
-        begin
-            found_match = 1'b1;
-            found_slot  = idx[SLOT_BITS-1:0];
-        end
+        found_match = slot_service_valid[found_slot];
     end
 end
 
