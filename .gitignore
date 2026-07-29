@@ -160,6 +160,7 @@ userSpace/dist/
 
 projects/*/build/
 projects/*/generated/
+tests
 
 # =========================================================
 
