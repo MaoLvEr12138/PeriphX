@@ -90,7 +90,7 @@ begin
     found_match = 1'b0;
     found_slot  = req_service_id_r[SLOT_BITS-1:0];
 
-    if(req_service_id_r < NUM_SLOTS)
+    if({24'd0, req_service_id_r} < NUM_SLOTS)
     begin
         found_match = slot_service_valid[found_slot];
     end

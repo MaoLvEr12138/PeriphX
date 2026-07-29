@@ -1,96 +1,77 @@
 module uart_tx(
-	input 			sys_clk,	
-	input 			sys_rst_n,	
-	input	[7:0] 	uart_data,	
-	input			uart_tx_en,	
-	output reg 		uart_txd	
- 
+    input  wire        clk,
+    input  wire        rst_n,
+    input  wire        enable,
+    input  wire [31:0] baud_div,
+    input  wire [7:0]  tx_data,
+    input  wire        tx_valid,
+    output wire        tx_ready,
+    output reg         tx_busy,
+    output reg         tx_done,
+    output reg         uart_txd
 );
- 
-parameter 	SYS_CLK_FRE=50_000_000;    
-parameter 	BPS=57600;                 
-localparam	BPS_CNT=SYS_CLK_FRE/BPS;   
- 
-reg	uart_tx_en_d0;			
-reg uart_tx_en_d1;			
-reg tx_flag;				
-reg [7:0]  uart_data_reg;	
-reg [15:0] clk_cnt;			
-reg [3:0]  tx_cnt;			
- 
-wire pos_uart_en_txd;		
 
-assign pos_uart_en_txd= uart_tx_en_d0 && (~uart_tx_en_d1);
- 
-always @(posedge sys_clk or negedge sys_rst_n)begin
-	if(!sys_rst_n)begin
-		uart_tx_en_d0<=1'b0;
-		uart_tx_en_d1<=1'b0;		
-	end
-	else begin
-		uart_tx_en_d0<=uart_tx_en;
-		uart_tx_en_d1<=uart_tx_en_d0;
-	end	
+wire [31:0] baud_limit = (baud_div == 32'd0) ? 32'd1 : baud_div;
+assign tx_ready = enable && !tx_busy;
+
+reg [31:0] baud_cnt;
+reg [3:0]  bit_cnt;
+reg [7:0]  tx_data_r;
+
+always @(posedge clk or negedge rst_n) begin
+    if(!rst_n) begin
+        baud_cnt  <= 32'd0;
+        bit_cnt   <= 4'd0;
+        tx_data_r <= 8'd0;
+        tx_busy   <= 1'b0;
+        tx_done   <= 1'b0;
+        uart_txd  <= 1'b1;
+    end else begin
+        tx_done <= 1'b0;
+
+        if(!enable) begin
+            baud_cnt <= 32'd0;
+            bit_cnt  <= 4'd0;
+            tx_busy  <= 1'b0;
+            uart_txd <= 1'b1;
+        end else if(!tx_busy) begin
+            baud_cnt <= 32'd0;
+            bit_cnt  <= 4'd0;
+            uart_txd <= 1'b1;
+
+            if(tx_valid) begin
+                tx_data_r <= tx_data;
+                tx_busy   <= 1'b1;
+                uart_txd  <= 1'b0;
+            end
+        end else begin
+            if(baud_cnt >= baud_limit - 32'd1) begin
+                baud_cnt <= 32'd0;
+
+                if(bit_cnt == 4'd9) begin
+                    bit_cnt  <= 4'd0;
+                    tx_busy  <= 1'b0;
+                    tx_done  <= 1'b1;
+                    uart_txd <= 1'b1;
+                end else begin
+                    bit_cnt <= bit_cnt + 4'd1;
+                    case(bit_cnt + 4'd1)
+                        4'd1: uart_txd <= tx_data_r[0];
+                        4'd2: uart_txd <= tx_data_r[1];
+                        4'd3: uart_txd <= tx_data_r[2];
+                        4'd4: uart_txd <= tx_data_r[3];
+                        4'd5: uart_txd <= tx_data_r[4];
+                        4'd6: uart_txd <= tx_data_r[5];
+                        4'd7: uart_txd <= tx_data_r[6];
+                        4'd8: uart_txd <= tx_data_r[7];
+                        default: uart_txd <= 1'b1;
+                    endcase
+                end
+            end else begin
+                baud_cnt <= baud_cnt + 32'd1;
+            end
+        end
+    end
 end
 
-always @(posedge sys_clk or negedge sys_rst_n)begin
-	if(!sys_rst_n)begin
-		tx_flag<=1'b0;
-		uart_data_reg<=8'd0;
-	end
-	else if(pos_uart_en_txd)begin
-		uart_data_reg<=uart_data;
-		tx_flag<=1'b1;
-	end
-	else if((tx_cnt==4'd9) && (clk_cnt==BPS_CNT/2))begin
-		tx_flag<=1'b0;
-		uart_data_reg<=8'd0;
-	end
-	else begin
-		uart_data_reg<=uart_data_reg;
-		tx_flag<=tx_flag;	
-	end
-end
-
-always @(posedge sys_clk or negedge sys_rst_n)begin
-	if(!sys_rst_n)begin
-		clk_cnt<=16'd0;
-		tx_cnt <=4'd0;
-	end
-	else if(tx_flag) begin
-		if(clk_cnt<BPS_CNT-1)begin
-			clk_cnt<=clk_cnt+1'b1;
-			tx_cnt <=tx_cnt;
-		end
-		else begin
-			clk_cnt<=16'd0;
-			tx_cnt <=tx_cnt+1'b1;
-		end
-	end
-	else begin
-		clk_cnt<=16'd0;
-		tx_cnt<=4'd0;
-	end
-end
-
-always @(posedge sys_clk or negedge sys_rst_n)begin
-	if(!sys_rst_n)
-		uart_txd<=1'b1;
-	else if(tx_flag)
-		case(tx_cnt)
-			4'd0:	uart_txd<=1'b0;
-			4'd1:	uart_txd<=uart_data_reg[0];
-			4'd2:	uart_txd<=uart_data_reg[1];
-			4'd3:	uart_txd<=uart_data_reg[2];
-			4'd4:	uart_txd<=uart_data_reg[3];
-			4'd5:	uart_txd<=uart_data_reg[4];
-			4'd6:	uart_txd<=uart_data_reg[5];
-			4'd7:	uart_txd<=uart_data_reg[6];
-			4'd8:	uart_txd<=uart_data_reg[7];
-			4'd9:	uart_txd<=1'b1;
-			default:;
-		endcase
-	else 	
-		uart_txd<=1'b1;
-end
 endmodule

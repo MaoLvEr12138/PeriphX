@@ -2,21 +2,31 @@ component: uart
 
 services:
   - name: set_baudrate
-    code: 0x01
     type: u32
     access: input
+    description: "设置 UART 波特率，例如 9600/57600/115200"
 
-  - name: power_button
-    code: 0x02
+  - name: set_enable
     type: bool
     access: input
+    description: "使能或关闭 UART"
 
-  - name: transmit
-    code: 0x03
+  - name: write_tx
     type: u8
     access: input
+    description: "写入 1 字节到 TX 缓冲并触发发送"
 
-  - name: receive
-    code: 0x04
+  - name: read_rx
     type: u8
     access: output
+    description: "读取 RX 缓冲中的 1 字节，读取后清除 rx_valid"
+
+  - name: get_status
+    type: u32
+    access: output
+    description: "读取 UART 状态位"
+
+  - name: clear_status
+    type: u32
+    access: input
+    description: "按 bit 清除 sticky 状态位"

@@ -283,7 +283,7 @@ begin
     if(!rst_n)
     begin
         tx_busy        <= 1'b0;
-        tx_index       <= 3'd0;
+        tx_index       <= 4'd0;
         tx_b1          <= 8'h00;
         tx_b2          <= 8'h00;
         tx_b3          <= 8'h00;
@@ -299,7 +299,7 @@ begin
             // Drop any pending TX frame when CS ends.
             spi_tx_valid <= 1'b0;
             tx_busy      <= 1'b0;
-            tx_index     <= 3'd0;
+            tx_index     <= 4'd0;
         end
         else if(!tx_busy)
         begin
@@ -378,7 +378,7 @@ begin
                     default:
                     begin
                         tx_busy     <= 1'b0;
-                        tx_index    <= 3'd0;
+                        tx_index    <= 4'd0;
                         spi_tx_valid <= 1'b0;
                     end
                 endcase
