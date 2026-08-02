@@ -1,0 +1,1 @@
+// TODO:把uart做成可调波特率、停止位、校验位的，重新编写temp_manifest.yml， mlr脚本需要增量开发以兼容uart

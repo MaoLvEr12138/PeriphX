@@ -382,7 +382,6 @@ begin
                         spi_tx_valid <= 1'b0;
                     end
                 endcase
-            end
         end
     end
 end
