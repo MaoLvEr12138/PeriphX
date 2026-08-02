@@ -294,6 +294,10 @@ begin
     end
     else
     begin
+        // spi_slave TX is FIFO-backed, so spi_tx_valid is a one-clk write
+        // strobe. Holding it high would enqueue duplicate bytes.
+        spi_tx_valid <= 1'b0;
+
         if(cs_end)
         begin
             // Drop any pending TX frame when CS ends.
@@ -303,8 +307,6 @@ begin
         end
         else if(!tx_busy)
         begin
-            spi_tx_valid <= 1'b0;
-
             if(tx_frame_valid)
             begin
                 // Latch the frame and precompute the CRC nibble.
@@ -320,60 +322,58 @@ begin
                 spi_tx_data  <= TURNAROUND_BYTE;
             end
         end
-        else
+        else if(spi_tx_ready)
         begin
             spi_tx_valid <= 1'b1;
 
-            if(spi_tx_ready)
-            begin
-                case(tx_index)
-                    4'd0:
-                    begin
-                        tx_index    <= 4'd1;
-                        spi_tx_data <= TURNAROUND_BYTE;
-                    end
+            case(tx_index)
+                4'd0:
+                begin
+                    tx_index    <= 4'd1;
+                    spi_tx_data <= TURNAROUND_BYTE;
+                end
 
-                    4'd1:
-                    begin
-                        tx_index    <= 4'd2;
-                        spi_tx_data <= TURNAROUND_BYTE;
-                    end
+                4'd1:
+                begin
+                    tx_index    <= 4'd2;
+                    spi_tx_data <= TURNAROUND_BYTE;
+                end
 
-                    4'd2:
-                    begin
-                        tx_index    <= 4'd3;
-                        spi_tx_data <= tx_server_id;
-                    end
+                4'd2:
+                begin
+                    tx_index    <= 4'd3;
+                    spi_tx_data <= tx_server_id;
+                end
 
-                    4'd3:
-                    begin
-                        tx_index    <= 4'd4;
-                        spi_tx_data <= tx_b1;
-                    end
+                4'd3:
+                begin
+                    tx_index    <= 4'd4;
+                    spi_tx_data <= tx_b1;
+                end
 
-                    4'd4:
-                    begin
-                        tx_index    <= 4'd5;
-                        spi_tx_data <= tx_b2;
-                    end
+                4'd4:
+                begin
+                    tx_index    <= 4'd5;
+                    spi_tx_data <= tx_b2;
+                end
 
-                    4'd5:
-                    begin
-                        tx_index    <= 4'd6;
-                        spi_tx_data <= tx_b3;
-                    end
+                4'd5:
+                begin
+                    tx_index    <= 4'd6;
+                    spi_tx_data <= tx_b3;
+                end
 
-                    4'd6:
-                    begin
-                        tx_index    <= 4'd7;
-                        spi_tx_data <= tx_b4;
-                    end
+                4'd6:
+                begin
+                    tx_index    <= 4'd7;
+                    spi_tx_data <= tx_b4;
+                end
 
-                    4'd7:
-                    begin
-                        tx_index    <= 4'd8;
-                        spi_tx_data <= tx_b5;
-                    end
+                4'd7:
+                begin
+                    tx_index    <= 4'd8;
+                    spi_tx_data <= tx_b5;
+                end
 
                     default:
                     begin

@@ -1,0 +1,12 @@
+# @brief 协议常量模块，集中定义生成 SDK 和 RTL 时共用的帧字段常量。
+# @date 2026-07-28
+# @author hzguo
+
+
+FRAME_LEN = 6
+TURNAROUND_LEN = 3
+TURNAROUND_BYTE = 0xFF
+REQUEST_MSG_TYPE = 0x0
+RESPONSE_MSG_TYPE = 0x1
+EVENT_MSG_TYPE = 0x2
+ERROR_MSG_TYPE = 0x3

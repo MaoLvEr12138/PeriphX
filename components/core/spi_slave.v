@@ -36,13 +36,10 @@ module spi_slave
 
 reg [7:0] rx_shift_spi; // SPI 域接收移位寄存器，按上升沿移入 MOSI
 reg [2:0] rx_count_spi; // SPI 域接收 bit 计数，0~7 表示一个字节内的位置
-reg [7:0] rx_byte_spi;  // SPI 域锁存的完整接收字节
-reg rx_toggle_spi;      // SPI 域接收事件翻转标志，收满 1 字节后翻转
 
 reg [7:0] tx_shift_spi; // SPI 域发送移位寄存器，当前正在从高位向外发送
-reg [7:0] tx_stage_spi; // SPI 域下一发送字节暂存，用于字节边界重装载
-reg [7:0] tx_load_spi;  // clk 域写入、SPI 域读取的待发送字节缓存
 reg [2:0] tx_count_spi; // SPI 域发送 bit 计数，控制当前字节的移位节拍
+reg tx_miso_spi;        // SPI 域寄存后的 MISO 输出位
 // Marks the first byte after CS goes low.
 reg tx_first_spi;       // SPI 域首字节标志，保证 CS 拉低后的第一个 MISO bit 稳定
 reg tx_req_toggle;      // SPI 域发送请求翻转标志，在字节开始处通知 clk 域补数
@@ -51,16 +48,77 @@ reg tx_req_toggle;      // SPI 域发送请求翻转标志，在字节开始处�
 // CDC state
 //////////////////////////////////////////////////////
 
-reg rx_toggle_sync1;    // clk 域 RX toggle 第一级同步寄存器
-reg rx_toggle_sync2;    // clk 域 RX toggle 第二级同步寄存器
-reg rx_toggle_last;     // clk 域上一次 RX toggle 状态，用于边沿检测
-reg rx_event_pending;   // clk 域接收事件待输出标志，延后一拍保证数据同步稳定
-reg [7:0] rx_byte_sync1; // clk 域接收字节第一级同步寄存器
-reg [7:0] rx_byte_sync2; // clk 域接收字节第二级同步寄存器
+wire       rx_fifo_wr_en;    // SPI 域 RX FIFO 写使能
+wire [7:0] rx_fifo_wr_data;  // SPI 域写入 RX FIFO 的完整接收字节
+wire       rx_fifo_full;     // SPI 域 RX FIFO 满标志
+wire       rx_fifo_ready;    // SPI 域 RX FIFO 可写标志
+wire       rx_fifo_rd_en;    // clk 域 RX FIFO 读使能
+wire [7:0] rx_fifo_rd_data;  // clk 域读取的 RX FIFO 队首字节
+wire       rx_fifo_empty;    // clk 域 RX FIFO 空标志
+wire       rx_fifo_valid;    // clk 域 RX FIFO 非空标志
+wire       tx_fifo_wr_en;    // clk 域 TX FIFO 写使能
+wire       tx_fifo_full;     // clk 域 TX FIFO 满标志
+wire       tx_fifo_ready;    // clk 域 TX FIFO 可写标志
+wire       tx_fifo_rd_clk;   // SPI 下降沿发送域对应的 FIFO 读时钟
+wire       tx_fifo_rd_en;    // SPI 域 TX FIFO 读使能
+wire [7:0] tx_fifo_rd_data;  // SPI 域读取的 TX FIFO 队首字节
+wire       tx_fifo_empty;    // SPI 域 TX FIFO 空标志
+wire       tx_fifo_valid;    // SPI 域 TX FIFO 非空标志
 
 reg tx_req_sync1;       // clk 域 TX 请求 toggle 第一级同步寄存器
 reg tx_req_sync2;       // clk 域 TX 请求 toggle 第二级同步寄存器
 reg tx_req_last;        // clk 域上一次 TX 请求 toggle 状态，用于生成 tx_ready
+
+assign rx_fifo_wr_data = {rx_shift_spi[6:0], spi_mosi};
+assign rx_fifo_wr_en = (!spi_cs_n) && (rx_count_spi == 3'd7) && rx_fifo_ready;
+assign rx_fifo_rd_en = rx_fifo_valid;
+assign tx_fifo_wr_en = tx_valid && tx_fifo_ready;
+assign tx_fifo_rd_clk = ~spi_clk;
+assign tx_fifo_rd_en = (!spi_cs_n) && (tx_count_spi == 3'd0) && tx_fifo_valid;
+
+async_fifo
+#(
+    .DATA_WIDTH(8),
+    .ADDR_WIDTH(3)
+)
+u_rx_fifo
+(
+    .wr_clk   (spi_clk),
+    .wr_rst_n (rst_n),
+    .wr_en    (rx_fifo_wr_en),
+    .wr_data  (rx_fifo_wr_data),
+    .wr_full  (rx_fifo_full),
+    .wr_ready (rx_fifo_ready),
+
+    .rd_clk   (clk),
+    .rd_rst_n (rst_n),
+    .rd_en    (rx_fifo_rd_en),
+    .rd_data  (rx_fifo_rd_data),
+    .rd_empty (rx_fifo_empty),
+    .rd_valid (rx_fifo_valid)
+);
+
+async_fifo
+#(
+    .DATA_WIDTH(8),
+    .ADDR_WIDTH(3)
+)
+u_tx_fifo
+(
+    .wr_clk   (clk),
+    .wr_rst_n (rst_n),
+    .wr_en    (tx_fifo_wr_en),
+    .wr_data  (tx_data),
+    .wr_full  (tx_fifo_full),
+    .wr_ready (tx_fifo_ready),
+
+    .rd_clk   (tx_fifo_rd_clk),
+    .rd_rst_n (rst_n),
+    .rd_en    (tx_fifo_rd_en),
+    .rd_data  (tx_fifo_rd_data),
+    .rd_empty (tx_fifo_empty),
+    .rd_valid (tx_fifo_valid)
+);
 
 //////////////////////////////////////////////////////
 // RX
@@ -74,8 +132,6 @@ begin
     begin
         rx_shift_spi <= 8'h00;
         rx_count_spi <= 3'd0;
-        rx_byte_spi  <= 8'h00;
-        rx_toggle_spi <= 1'b0;
     end
     else if(spi_cs_n)
     begin
@@ -93,13 +149,8 @@ begin
 
         if(rx_count_spi == 3'd7)
         begin
-            // 收满 8 bit 后锁存完整字节，并翻转事件标志通知 clk 域。
+            // 收满 8 bit 后 RX FIFO 会在当前边沿写入完整字节。
             rx_count_spi <= 3'd0;
-            rx_byte_spi  <= {
-                rx_shift_spi[6:0],
-                spi_mosi
-            };
-            rx_toggle_spi <= ~rx_toggle_spi;
         end
         else
         begin
@@ -120,51 +171,42 @@ begin
     if(!rst_n)
     begin
         tx_count_spi <= 3'd7;
-        tx_shift_spi  <= 8'h00;
-        tx_stage_spi  <= 8'h00;
-        tx_first_spi  <= 1'b1;
+        tx_shift_spi <= 8'h00;
+        tx_miso_spi  <= 1'b0;
+        tx_first_spi <= 1'b1;
     end
     else if(spi_cs_n)
     begin
-        // CS 无效期间预装载发送字节，保证下一次 CS 拉低时首 bit 已经稳定。
+        // CS 无效期间清空发送节拍状态，下一次片选重新对齐字节边界。
         tx_count_spi <= 3'd7;
-        tx_shift_spi  <= tx_load_spi;
-        tx_stage_spi  <= tx_load_spi;
-        tx_first_spi  <= 1'b1;
+        tx_shift_spi <= 8'h00;
+        tx_miso_spi  <= 1'b0;
+        tx_first_spi <= 1'b1;
     end
     else if(tx_first_spi)
     begin
-        // Consume the first byte on the first falling edge after CS low.
-        // CS 拉低后的首个下降沿开始消耗首字节，后续 bit 继续在下降沿更新。
+        // CS 拉低后的首个下降沿先输出填充字节，等待 FIFO 指针跨域稳定。
         tx_count_spi <= 3'd6;
-        tx_shift_spi  <= {
-            tx_shift_spi[6:0],
-            1'b0
-        };
-        tx_stage_spi  <= tx_load_spi;
-        tx_first_spi  <= 1'b0;
+        tx_shift_spi <= tx_shift_spi;
+        tx_miso_spi  <= tx_shift_spi[6];
+        tx_first_spi <= 1'b0;
     end
     else
     begin
-        // 每个下降沿刷新下一字节暂存，给字节边界重装载使用。
-        tx_stage_spi <= tx_load_spi;
-
         if(tx_count_spi == 0)
         begin
-            // 当前字节发送完成，在字节边界装载 staged byte。
+            // 当前字节发送完成，在字节边界直接装载 FIFO 队首字节。
             tx_count_spi <= 3'd7;
-            // Reload the staged byte and start the next byte cadence.
-            tx_shift_spi <= tx_stage_spi;
+            tx_shift_spi <= tx_fifo_valid ? tx_fifo_rd_data : 8'h00;
+            tx_miso_spi  <= tx_fifo_valid ? tx_fifo_rd_data[7] : 1'b0;
             tx_first_spi <= 1'b0;
         end
         else
         begin
-            // 当前字节尚未发送完成，左移一位并继续输出下一 bit。
+            // 当前字节尚未发送完成，仅推进 bit 计数并提前准备下一输出位。
             tx_count_spi <= tx_count_spi - 3'd1;
-            tx_shift_spi <= {
-                tx_shift_spi[6:0],
-                1'b0
-            };
+            tx_shift_spi <= tx_shift_spi;
+            tx_miso_spi  <= tx_shift_spi[tx_count_spi - 3'd1];
             tx_first_spi <= 1'b0;
         end
     end
@@ -177,27 +219,8 @@ end
 assign spi_miso =
         spi_cs_n ?
         1'bz :
-        // 未选中时输出高阻；首 bit 直接取 staged MSB，避免 Mode 0 首个采样沿前不稳定。
-        (tx_first_spi ? tx_stage_spi[7] : tx_shift_spi[7]);
-
-//////////////////////////////////////////////////////
-// TX byte loading
-//
-// Keep the byte stable in the clk domain so the SPI domain can sample it.
-//////////////////////////////////////////////////////
-
-always @(posedge clk or negedge rst_n)
-begin
-    if(!rst_n)
-    begin
-        tx_load_spi <= 8'h00;
-    end
-    else if(tx_valid)
-    begin
-        // 上层提供新字节时锁存，SPI 域会在后续字节窗口取走。
-        tx_load_spi <= tx_data;
-    end
-end
+        // 未选中时输出高阻；选中后输出下降沿提前准备好的寄存位。
+        tx_miso_spi;
 
 //////////////////////////////////////////////////////
 // CDC RX
@@ -207,38 +230,18 @@ always @(posedge clk or negedge rst_n)
 begin
     if(!rst_n)
     begin
-        rx_toggle_sync1 <= 1'b0;
-        rx_toggle_sync2 <= 1'b0;
-        rx_toggle_last  <= 1'b0;
-        rx_event_pending <= 1'b0;
-        rx_byte_sync1   <= 8'h00;
-        rx_byte_sync2   <= 8'h00;
-        rx_valid        <= 1'b0;
-        rx_data         <= 8'h00;
+        rx_valid <= 1'b0;
+        rx_data  <= 8'h00;
     end
     else
     begin
-        // 将 SPI 域的接收事件和接收字节同步到 clk 域。
-        rx_toggle_sync1 <= rx_toggle_spi;
-        rx_toggle_sync2 <= rx_toggle_sync1;
-        rx_byte_sync1   <= rx_byte_spi;
-        rx_byte_sync2   <= rx_byte_sync1;
-
+        // RX FIFO 非空时每个 clk 周期输出并弹出一个完整接收字节。
         rx_valid <= 1'b0;
 
-        if(rx_event_pending)
+        if(rx_fifo_valid)
         begin
-            // 事件确认后一拍输出接收字节，rx_valid 只保持一个 clk 周期。
-            rx_data         <= rx_byte_sync2;
-            rx_valid        <= 1'b1;
-            rx_event_pending <= 1'b0;
-        end
-
-        if(rx_toggle_sync2 != rx_toggle_last)
-        begin
-            // 检测到 RX toggle 变化，说明 SPI 域已经收到一个完整字节。
-            rx_toggle_last   <= rx_toggle_sync2;
-            rx_event_pending  <= 1'b1;
+            rx_data  <= rx_fifo_rd_data;
+            rx_valid <= 1'b1;
         end
     end
 end
