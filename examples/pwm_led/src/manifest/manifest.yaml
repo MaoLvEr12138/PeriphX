@@ -1,0 +1,61 @@
+manifest_version: 1.0
+
+config:
+
+  fpga:
+    # 品牌厂商
+    brand: "Altera"
+
+    # 芯片系列
+    family: "Cyclone IV E"
+
+    # 芯片型号
+    device: "EP4CE6E22C8"
+
+    # TCL工具目录
+    EDA_path: "D:/Quarters13.0.1/quartus/bin64/quartus_sh.exe"
+
+  clock:
+    # 输入时钟频率
+    input_freq: 50_000_000
+
+    # 输入时钟引脚
+    input_pin: PIN_25
+  
+  rst:
+    # 复位信号输入引脚（低电平有效）
+    input_pin: PIN_88
+
+  spi:
+    # fpga需要通过spi与mcu交互,请在此设置fpga的spi相关引脚
+    spi_clk_pin: PIN_106
+
+    spi_cs_pin: PIN_105
+
+    spi_mosi_pin: PIN_104
+
+    spi_miso_pin: PIN_103
+
+
+components:
+
+  - type: pwm_led
+
+    name: pwm_led1
+
+    parameters:
+
+    pins:
+
+      led_pwm: PIN_1
+
+    
+  - type: pwm_led
+
+    name: pwm_led2
+
+    parameters:
+
+    pins:
+
+      led_pwm: PIN_2
