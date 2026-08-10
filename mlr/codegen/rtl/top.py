@@ -12,6 +12,11 @@ from mlr.codegen.rtl.components.pwm_led import (
     emit_pwm_led_instance,
     is_pwm_led_output_pin,
 )
+from mlr.codegen.rtl.components.uart import (
+    emit_uart_adapter,
+    emit_uart_instance,
+    is_uart_output_pin,
+)
 from mlr.project import ComponentSpec, ProjectSpec
 
 # @brief 生成包含组件适配器和 periphx_top 的 RTL 文件。
@@ -34,6 +39,8 @@ def write_generated_rtl(spec: ProjectSpec, path: Path) -> Path:
     for component_type in unique_types:
         if component_type == "pwm_led":
             lines.extend(emit_pwm_led_adapter())
+        elif component_type == "uart":
+            lines.extend(emit_uart_adapter())
         else:
             raise NotImplementedError(
                 f"component type {component_type!r} is not supported by the current generator"
@@ -168,11 +175,14 @@ def emit_top_module(spec: ProjectSpec) -> list[str]:
     lines.append("")
 
     for component in spec.components:
-        if component.component_type != "pwm_led":
+        if component.component_type == "pwm_led":
+            lines.extend(emit_pwm_led_instance(spec, component))
+        elif component.component_type == "uart":
+            lines.extend(emit_uart_instance(spec, component))
+        else:
             raise NotImplementedError(
                 f"component type {component.component_type!r} is not supported by the current generator"
             )
-        lines.extend(emit_pwm_led_instance(spec, component))
         lines.append("")
 
     lines.append("endmodule")
@@ -185,4 +195,6 @@ def emit_top_module(spec: ProjectSpec) -> list[str]:
 def is_output_pin(component: ComponentSpec, pin_name: str) -> bool:
     if component.component_type == "pwm_led":
         return is_pwm_led_output_pin(pin_name)
+    if component.component_type == "uart":
+        return is_uart_output_pin(pin_name)
     return True

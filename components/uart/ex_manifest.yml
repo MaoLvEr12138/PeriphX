@@ -1,0 +1,21 @@
+components:
+
+  - type: uart
+
+      name: uart1
+
+      parameters:
+
+        baudrate: 115200
+
+        data_bits: 8
+
+        parity: none
+
+        stop_bits: 1
+
+      pins:
+
+        rxd: PIN_3
+
+        txd: PIN_4
