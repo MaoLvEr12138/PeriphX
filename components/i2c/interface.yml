@@ -1,0 +1,57 @@
+component: i2c
+
+services:
+  - name: set_clk_div
+    type: u32
+    access: input
+    description: "设置 I2C SCL 半周期分频；0 表示使用默认配置"
+
+  - name: set_stretch_timeout
+    type: u32
+    access: input
+    description: "设置 clock stretching 超时周期；0 表示使用默认配置"
+
+  - name: set_dev_addr
+    type: u8
+    access: input
+    description: "设置 7-bit I2C 从设备地址"
+
+  - name: set_reg_addr
+    type: u8
+    access: input
+    description: "设置 8-bit 起始寄存器地址"
+
+  - name: set_length
+    type: u8
+    access: input
+    description: "设置事务长度，合法范围 1..16 bytes"
+
+  - name: push_write_data
+    type: u8
+    access: input
+    description: "向 16-byte TX buffer 追加 1 byte；满时返回 full"
+
+  - name: start_write
+    type: bool
+    access: input
+    description: "启动多字节写事务：START、addr+W、reg、data[0..n-1]、STOP"
+
+  - name: start_read
+    type: bool
+    access: input
+    description: "启动多字节读事务：START、addr+W、reg、repeated START、addr+R、data[0..n-1]、STOP"
+
+  - name: pop_read_data
+    type: u8
+    access: output
+    description: "从 16-byte RX buffer 弹出 1 byte；空时返回 empty"
+
+  - name: get_status
+    type: u32
+    access: output
+    description: "读取状态：bit0 busy，bit1 done，bit2 ack_error，bit3 stretch_timeout，bit4 arb_lost，bit5 tx_full，bit6 tx_empty，bit7 rx_full，bit8 rx_empty，bit15:12 error_code，bit23:16 tx_count，bit31:24 rx_count"
+
+  - name: clear_status
+    type: u32
+    access: input
+    description: "清 sticky 状态和 buffer；0 清 done/ack_error/stretch_timeout/arb_lost/error_code 并清 TX/RX，bit1/2/3/4 分别清对应 sticky，bit8 清 TX，bit9 清 RX，bit15 清 error_code"
