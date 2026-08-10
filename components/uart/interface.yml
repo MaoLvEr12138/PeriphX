@@ -1,22 +1,22 @@
 component: uart
 
 services:
-  - name: set_baudrate
-    code: 0x01
+  - name: configure
     type: u32
     access: input
+    description: "写入UART运行时配置"
 
-  - name: power_button
-    code: 0x02
-    type: bool
-    access: input
-
-  - name: transmit
-    code: 0x03
+  - name: write_byte
     type: u8
     access: input
+    description: "写入1字节到UART TX FIFO"
 
-  - name: receive
-    code: 0x04
+  - name: read_byte
     type: u8
     access: output
+    description: "从UART RX FIFO读取1字节"
+
+  - name: get_status
+    type: u32
+    access: output
+    description: "读取UART状态"

@@ -1,39 +1,35 @@
 module uart_top(
-	input 	sys_clk,	
-	input 	sys_rst_n,	
- 
-	input 	uart_rxd,	
-	output 	uart_txd	
- 
-);
-parameter	UART_BPS=57600;			
-parameter	CLK_FREQ=50_000_000;	
- 
-wire uart_en_w;
-wire [7:0] uart_data_w; 
-
-
-uart_tx#(
-	.BPS		    (UART_BPS),
-	.SYS_CLK_FRE	(CLK_FREQ))
-u_uart_tx(
-	.sys_clk		(sys_clk),
-	.sys_rst_n	    (sys_rst_n),
-	.uart_tx_en		(uart_en_w),
-	.uart_data	    (uart_data_w),	
-	.uart_txd	    (uart_txd)
+    input  wire sys_clk,
+    input  wire sys_rst_n,
+    input  wire uart_rxd,
+    output wire uart_txd
 );
 
-uart_rx #(
-	.BPS				(UART_BPS),
-	.SYS_CLK_FRE		(CLK_FREQ))
-u_uart_rx(
-	.sys_clk			(sys_clk),
-	.sys_rst_n		    (sys_rst_n),
-	
-	.uart_rxd		    (uart_rxd),	
-	.uart_rx_done	    (uart_en_w),
-	.uart_rx_data	    (uart_data_w)
+wire [31:0] unused_status;
+wire [7:0] unused_rx_data;
+
+uart_core #(
+    .DEFAULT_CONFIG(32'h0003_01B2),
+    .FIFO_ADDR_WIDTH(4)
+) u_uart_core (
+    .clk           (sys_clk),
+    .rst_n         (sys_rst_n),
+    .cfg_valid     (1'b0),
+    .cfg_payload   (32'd0),
+    .cfg_bad_config(),
+    .cfg_busy      (),
+    .tx_write      (1'b0),
+    .tx_write_data (8'd0),
+    .tx_full       (),
+    .tx_empty      (),
+    .tx_busy       (),
+    .rx_read       (1'b0),
+    .rx_read_data  (unused_rx_data),
+    .rx_empty      (),
+    .rx_full       (),
+    .status        (unused_status),
+    .uart_rxd      (uart_rxd),
+    .uart_txd      (uart_txd)
 );
- 
+
 endmodule

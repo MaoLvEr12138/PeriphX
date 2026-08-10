@@ -1,0 +1,4 @@
+obj_dir/
+coverage_report/
+coverage.dat
+functional_coverage.txt

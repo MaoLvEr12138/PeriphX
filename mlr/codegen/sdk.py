@@ -16,7 +16,10 @@ from mlr.codegen.protocol import (
     TURNAROUND_BYTE,
     TURNAROUND_LEN,
 )
-from mlr.project import ProjectSpec
+from mlr.project import ComponentSpec, ProjectSpec, ServiceSpec, sanitize_identifier
+
+UART_SERVICE_NAMES = ["configure", "write_byte", "read_byte", "get_status"]
+
 
 # @brief 根据工程服务列表生成 PeriphX SDK 头文件。
 # @param spec 规范化后的工程配置、组件和服务信息。
@@ -57,6 +60,7 @@ def write_sdk_header(spec: ProjectSpec, path: Path) -> Path:
     lines.append("    PERIPHX_ERR_FRAME = -2,")
     lines.append("    PERIPHX_ERR_CRC = -3,")
     lines.append("    PERIPHX_ERR_RESPONSE = -4,")
+    lines.append("    PERIPHX_ERR_PARAM = -5,")
     lines.append("} periphx_status_t;")
     lines.append("")
     lines.append(
@@ -75,6 +79,9 @@ def write_sdk_header(spec: ProjectSpec, path: Path) -> Path:
     lines.append("    uint8_t crc4;")
     lines.append("} periphx_frame_t;")
     lines.append("")
+    if has_uart(spec):
+        lines.extend(emit_uart_type_declarations())
+        lines.append("")
     for service in spec.services:
         macro = service.c_macro_name
         lines.append(f"#define {macro} {service.service_id}u")
@@ -87,17 +94,17 @@ def write_sdk_header(spec: ProjectSpec, path: Path) -> Path:
     lines.append("int periphx_call_u8(periphx_device_t *dev, uint8_t service_id, uint8_t value, uint32_t *response_value);")
     lines.append("int periphx_call_bool(periphx_device_t *dev, uint8_t service_id, bool value, uint32_t *response_value);")
     lines.append("")
-    for service in spec.services:
-        c_fn = service.c_function_name
-        type_name = c_type_name(service.data_type)
-        lines.append(
-            f"int {c_fn}(periphx_device_t *dev, {type_name} value, uint32_t *response_value);"
-        )
+    for component in spec.components:
+        if component.component_type == "uart":
+            lines.extend(emit_uart_header_functions(component))
+        else:
+            lines.extend(emit_generic_header_functions(component.services))
     lines.append("")
     lines.append("#endif /* PERIPHX_SDK_H */")
 
     path.write_text("\n".join(lines) + "\n", encoding="utf-8")
     return path
+
 
 # @brief 根据工程服务列表生成 PeriphX SDK 源文件。
 # @param spec 规范化后的工程配置、组件和服务信息。
@@ -249,7 +256,129 @@ def write_sdk_source(spec: ProjectSpec, path: Path) -> Path:
     lines.append("    return periphx_call_u32(dev, service_id, value ? 1u : 0u, response_value);")
     lines.append("}")
     lines.append("")
-    for service in spec.services:
+    if has_uart(spec):
+        lines.extend(emit_uart_pack_config())
+        lines.append("")
+    for component in spec.components:
+        if component.component_type == "uart":
+            lines.extend(emit_uart_source_functions(spec, component))
+        else:
+            lines.extend(emit_generic_source_functions(component.services))
+
+    path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    return path
+
+
+# @brief 将 PeriphX 服务数据类型转换为 C 语言类型名称。
+# @param data_type manifest 或 interface 中声明的服务数据类型。
+# @return 对应的 C 语言类型名称。
+def c_type_name(data_type: str) -> str:
+    if data_type == "bool":
+        return "bool"
+    if data_type == "u8":
+        return "uint8_t"
+    return "uint32_t"
+
+
+# @brief 判断当前工程是否包含 uart 组件。
+def has_uart(spec: ProjectSpec) -> bool:
+    return any(component.component_type == "uart" for component in spec.components)
+
+
+# @brief 输出 UART SDK 通用类型声明。
+def emit_uart_type_declarations() -> list[str]:
+    return [
+        "typedef enum {",
+        "    PERIPHX_UART_PARITY_NONE = 0,",
+        "    PERIPHX_UART_PARITY_ODD = 1,",
+        "    PERIPHX_UART_PARITY_EVEN = 2,",
+        "} periphx_uart_parity_t;",
+        "",
+        "typedef struct {",
+        "    uint32_t baudrate;",
+        "    uint8_t data_bits;",
+        "    periphx_uart_parity_t parity;",
+        "    uint8_t stop_bits;",
+        "} periphx_uart_config_t;",
+        "",
+        "#define PERIPHX_UART_STATUS_RX_EMPTY      (1u << 0)",
+        "#define PERIPHX_UART_STATUS_RX_FULL       (1u << 1)",
+        "#define PERIPHX_UART_STATUS_TX_EMPTY      (1u << 2)",
+        "#define PERIPHX_UART_STATUS_TX_FULL       (1u << 3)",
+        "#define PERIPHX_UART_STATUS_TX_BUSY       (1u << 4)",
+        "#define PERIPHX_UART_STATUS_RX_OVERFLOW   (1u << 5)",
+        "#define PERIPHX_UART_STATUS_PARITY_ERROR  (1u << 6)",
+        "#define PERIPHX_UART_STATUS_FRAME_ERROR   (1u << 7)",
+    ]
+
+
+# @brief 输出非 UART 服务函数声明。
+def emit_generic_header_functions(services: list[ServiceSpec]) -> list[str]:
+    lines: list[str] = []
+    for service in services:
+        c_fn = service.c_function_name
+        type_name = c_type_name(service.data_type)
+        lines.append(
+            f"int {c_fn}(periphx_device_t *dev, {type_name} value, uint32_t *response_value);"
+        )
+    return lines
+
+
+# @brief 输出 UART 实例函数声明。
+def emit_uart_header_functions(component: ComponentSpec) -> list[str]:
+    prefix = sanitize_identifier(f"periphx_{component.name}")
+    return [
+        f"int {prefix}_configure(periphx_device_t *dev, const periphx_uart_config_t *config, uint32_t *response_value);",
+        f"int {prefix}_write_byte(periphx_device_t *dev, uint8_t value, uint32_t *response_value);",
+        f"int {prefix}_read_byte(periphx_device_t *dev, uint8_t *value);",
+        f"int {prefix}_get_status(periphx_device_t *dev, uint32_t *status_value);",
+        "",
+    ]
+
+
+# @brief 输出 UART 配置打包 helper。
+def emit_uart_pack_config() -> list[str]:
+    return [
+        "static int periphx_pack_uart_config(uint32_t clock_hz, const periphx_uart_config_t *config, uint32_t *payload)",
+        "{",
+        "    uint32_t baud_div;",
+        "",
+        "    if(config == NULL || payload == NULL) {",
+        "        return PERIPHX_ERR_PARAM;",
+        "    }",
+        "    if(clock_hz == 0u || config->baudrate == 0u) {",
+        "        return PERIPHX_ERR_PARAM;",
+        "    }",
+        "    if(config->data_bits < 5u || config->data_bits > 8u) {",
+        "        return PERIPHX_ERR_PARAM;",
+        "    }",
+        "    if(config->parity != PERIPHX_UART_PARITY_NONE &&",
+        "       config->parity != PERIPHX_UART_PARITY_ODD &&",
+        "       config->parity != PERIPHX_UART_PARITY_EVEN) {",
+        "        return PERIPHX_ERR_PARAM;",
+        "    }",
+        "    if(config->stop_bits != 1u && config->stop_bits != 2u) {",
+        "        return PERIPHX_ERR_PARAM;",
+        "    }",
+        "",
+        "    baud_div = (clock_hz + (config->baudrate / 2u)) / config->baudrate;",
+        "    if(baud_div == 0u || baud_div > 65535u) {",
+        "        return PERIPHX_ERR_PARAM;",
+        "    }",
+        "",
+        "    *payload = (baud_div & 0xFFFFu) |",
+        "               (((uint32_t)(config->data_bits - 5u) & 0x7u) << 16) |",
+        "               (((uint32_t)config->parity & 0x3u) << 19) |",
+        "               (((uint32_t)(config->stop_bits - 1u) & 0x1u) << 21);",
+        "    return PERIPHX_OK;",
+        "}",
+    ]
+
+
+# @brief 输出非 UART 服务函数实现。
+def emit_generic_source_functions(services: list[ServiceSpec]) -> list[str]:
+    lines: list[str] = []
+    for service in services:
         c_fn = service.c_function_name
         type_name = c_type_name(service.data_type)
         lines.append(
@@ -270,16 +399,68 @@ def write_sdk_source(spec: ProjectSpec, path: Path) -> Path:
             )
         lines.append("}")
         lines.append("")
+    return lines
 
-    path.write_text("\n".join(lines) + "\n", encoding="utf-8")
-    return path
 
-# @brief 将 PeriphX 服务数据类型转换为 C 语言类型名称。
-# @param data_type manifest 或 interface 中声明的服务数据类型。
-# @return 对应的 C 语言类型名称。
-def c_type_name(data_type: str) -> str:
-    if data_type == "bool":
-        return "bool"
-    if data_type == "u8":
-        return "uint8_t"
-    return "uint32_t"
+# @brief 输出 UART 实例函数实现。
+def emit_uart_source_functions(spec: ProjectSpec, component: ComponentSpec) -> list[str]:
+    prefix = sanitize_identifier(f"periphx_{component.name}")
+    services = {service.name: service for service in component.services}
+    missing = [name for name in UART_SERVICE_NAMES if name not in services]
+    if missing:
+        raise ValueError(
+            f"uart component {component.name} missing services: {', '.join(missing)}"
+        )
+
+    clock_hz = sdk_clock_hz(spec)
+    configure_macro = services["configure"].c_macro_name
+    write_macro = services["write_byte"].c_macro_name
+    read_macro = services["read_byte"].c_macro_name
+    status_macro = services["get_status"].c_macro_name
+    return [
+        f"int {prefix}_configure(periphx_device_t *dev, const periphx_uart_config_t *config, uint32_t *response_value)",
+        "{",
+        "    uint32_t payload = 0u;",
+        f"    int status = periphx_pack_uart_config({clock_hz}u, config, &payload);",
+        "    if(status != PERIPHX_OK) {",
+        "        return status;",
+        "    }",
+        f"    return periphx_call_u32(dev, {configure_macro}, payload, response_value);",
+        "}",
+        "",
+        f"int {prefix}_write_byte(periphx_device_t *dev, uint8_t value, uint32_t *response_value)",
+        "{",
+        f"    return periphx_call_u8(dev, {write_macro}, value, response_value);",
+        "}",
+        "",
+        f"int {prefix}_read_byte(periphx_device_t *dev, uint8_t *value)",
+        "{",
+        "    uint32_t response_value = 0u;",
+        f"    int status = periphx_call_u32(dev, {read_macro}, 0u, &response_value);",
+        "    if(status != PERIPHX_OK) {",
+        "        return status;",
+        "    }",
+        "    if(value != NULL) {",
+        "        *value = (uint8_t)(response_value & 0xFFu);",
+        "    }",
+        "    return PERIPHX_OK;",
+        "}",
+        "",
+        f"int {prefix}_get_status(periphx_device_t *dev, uint32_t *status_value)",
+        "{",
+        f"    return periphx_call_u32(dev, {status_macro}, 0u, status_value);",
+        "}",
+        "",
+    ]
+
+
+# @brief 读取 SDK 生成需要使用的系统时钟频率。
+def sdk_clock_hz(spec: ProjectSpec) -> int:
+    clock_cfg = spec.config.get("clock", {}) or {}
+    raw_freq = clock_cfg.get("input_freq", 50_000_000)
+    if isinstance(raw_freq, str):
+        raw_freq = raw_freq.replace("_", "")
+    freq = int(raw_freq)
+    if freq <= 0:
+        raise ValueError("clock.input_freq must be positive for sdk")
+    return freq
