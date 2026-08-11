@@ -148,6 +148,26 @@ def emit_uart_adapter() -> list[str]:
         wire        rx_empty;
         wire        rx_full;
         wire [31:0] uart_status;
+        wire [15:0] configure_baud_div;
+        wire [2:0]  configure_data_bits_code;
+        wire [1:0]  configure_parity;
+        wire        configure_reserved_nonzero;
+        wire        configure_data_bits_invalid;
+        wire        configure_parity_invalid;
+        wire        configure_bad_config;
+
+        assign configure_baud_div = configure_req_payload[15:0];
+        assign configure_data_bits_code = configure_req_payload[18:16];
+        assign configure_parity = configure_req_payload[20:19];
+        assign configure_reserved_nonzero = |configure_req_payload[31:22];
+        assign configure_data_bits_invalid = (configure_data_bits_code > 3'd3);
+        assign configure_parity_invalid = (configure_parity == 2'd3);
+        assign configure_bad_config = (
+            (configure_baud_div == 16'd0) ||
+            configure_reserved_nonzero ||
+            configure_data_bits_invalid ||
+            configure_parity_invalid
+        );
 
         uart_core #(
             .DEFAULT_CONFIG(DEFAULT_CONFIG)
@@ -215,19 +235,17 @@ def emit_uart_adapter() -> list[str]:
                     if(configure_req_msg_type != MSG_REQUEST) begin
                         configure_rsp_msg_type <= MSG_ERROR;
                         configure_rsp_payload <= ERR_BAD_TYPE;
+                    end else if(tx_busy) begin
+                        configure_rsp_msg_type <= MSG_ERROR;
+                        configure_rsp_payload <= UART_ERR_BUSY;
+                    end else if(configure_bad_config) begin
+                        configure_rsp_msg_type <= MSG_ERROR;
+                        configure_rsp_payload <= UART_ERR_BAD_CONFIG;
                     end else begin
                         cfg_valid <= 1'b1;
                         cfg_payload <= configure_req_payload;
-                        if(cfg_busy) begin
-                            configure_rsp_msg_type <= MSG_ERROR;
-                            configure_rsp_payload <= UART_ERR_BUSY;
-                        end else if(cfg_bad_config) begin
-                            configure_rsp_msg_type <= MSG_ERROR;
-                            configure_rsp_payload <= UART_ERR_BAD_CONFIG;
-                        end else begin
-                            configure_rsp_msg_type <= MSG_RESPONSE;
-                            configure_rsp_payload <= configure_req_payload;
-                        end
+                        configure_rsp_msg_type <= MSG_RESPONSE;
+                        configure_rsp_payload <= configure_req_payload;
                     end
                 end
 
