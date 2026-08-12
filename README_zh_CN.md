@@ -4,12 +4,13 @@
 
 PeriphX 是面向 MCU 开发者的可配置 FPGA 外设框架。
 
-当前仓库已经具备一条可工作的端到端基线：
+当前仓库已经具备一条可工作的端到端基线，并已完成生成式 UART 组件验证：
 
 - MCU 通过 SPI 与 FPGA 通信
 - FPGA 解析固定长度帧并把请求路由到服务
 - `mlr` 会生成 RTL、SDK、服务映射以及 Quartus 所需产物
-- 当前参考组件是 `pwm_led`
+- `pwm_led` 仍然是参考 bring-up 组件
+- `uart` 已实现为支持运行时配置和固定 TX/RX FIFO 的 PeriphX 组件
 
 ## 当前状态
 
@@ -17,13 +18,16 @@ PeriphX 是面向 MCU 开发者的可配置 FPGA 外设框架。
 
 - `spi_slave`、帧解析器和 router 已经实现
 - `pwm_led` 是当前的参考服务路径
+- `uart` 已接入 `mlr` 代码生成和 SDK 包装接口
+- UART 支持 manifest 默认配置和 MCU 侧运行时配置
+- UART 已通过 Verilator testbench、功能覆盖率和行覆盖率检查验证
 - 生成的 SDK 已经可以给 MCU 端接入
 - 所有生成物都放在 `tests/build/mlr`
 
 还需要说明的是：
 
 - 这个框架还不是完整最终版
-- 目前生成器以 `pwm_led` 作为参考组件
+- 组件支持正在从 `pwm_led` 和 `uart` 继续扩展到更多常用外设
 - 服务 ID 在构建时按 `manifest.yaml` 中的顺序分配
 
 ## 仓库结构
@@ -32,6 +36,8 @@ PeriphX 是面向 MCU 开发者的可配置 FPGA 外设框架。
   - 核心 RTL：`spi_slave`、`protocol_parse`、`data_router`
 - `components/pwm_led/`
   - 用于打通整条链路的参考组件
+- `components/uart/`
+  - 生成式 UART 组件，支持运行时配置、TX/RX FIFO、SDK 包装接口和 Verilator 测试
 - `userSpace/manifest.yaml`
   - 当前构建的唯一输入源
 - `mlr/`
@@ -61,37 +67,6 @@ flowchart LR
 - MCU SDK 头文件和源码
 - 服务 ID 映射元数据
 - Quartus 工程输入和 bitstream
-
-## 当前协议
-
-当前帧格式固定为 6 字节：
-
-```text
-byte0: server_id
-byte1: payload[31:24]
-byte2: payload[23:16]
-byte3: payload[15:8]
-byte4: payload[7:0]
-byte5: {crc4[7:4], msg_type[3:0]}
-```
-
-消息类型：
-
-- `0x0` request
-- `0x1` response
-- `0x2` event
-- `0x3` error
-
-CRC：
-
-- CRC4 使用多项式 `x^4 + x + 1`
-- 采用 MSB-first
-- 初值为 `0`
-
-当前调试阶段的 SDK 在 request 和 readback 中间保留了一个短的对齐窗口，
-这样响应更容易落在稳定的字节边界上。
-
-更完整的说明见 [`docs/frame_format.txt`](docs/frame_format.txt)。
 
 ## MCU 接入方式
 
@@ -135,6 +110,8 @@ periphx_pwm_led1_set_sys_cnt_duty(&dev, 25000000u, &response);
 - 类型封装接口，例如 `periphx_call_u32`
 - 根据 `manifest.yaml` 自动生成的组件级接口
 
+对于 UART 实例，生成的 SDK 还会提供基于 `periphx_uart_config_t` 的结构体配置接口。MCU 代码可以直接配置波特率、数据位、校验位和停止位，不需要手动打包底层 payload。
+
 ## 构建
 
 在仓库根目录运行：
@@ -151,11 +128,12 @@ python -m mlr build
 
 ## 说明
 
-- 当前基线是围绕 `pwm_led` 参考路径验证的。
+- 当前基线已经围绕 `pwm_led` 参考路径和生成式 UART 组件路径验证。
 - 如果你修改了 `manifest.yaml` 里组件或服务的顺序，重新生成后服务 ID 会变化，
   因为 ID 是构建时分配的。
 - 所有生成文件都放在 `tests/build/mlr`，不要手改。
 - 日常开发时，把 `userSpace/manifest.yaml` 当作输入，把 `tests/build/mlr/` 当作可丢弃输出。
+- 后续开发优先级记录在 [`MLR_TBD.md`](MLR_TBD.md)。当前方向包括 IRQ 机制、更完整的 I2C master、GPIO、SPI master、Timer、更多测试/CI 和更多 example。
 
 ## 联系
 

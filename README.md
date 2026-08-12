@@ -4,12 +4,13 @@
 
 PeriphX is a configurable FPGA peripheral framework for MCU developers.
 
-The current repository state already contains a working end-to-end baseline:
+The current repository state already contains a working end-to-end baseline and a verified generated UART component:
 
 - MCU talks to the FPGA over SPI
 - The FPGA parses fixed-size frames and routes requests to services
 - `mlr` generates the RTL, SDK, service map, and Quartus project artifacts
-- The `pwm_led` service is used as the current reference component
+- `pwm_led` remains the reference bring-up component
+- `uart` is implemented as a PeriphX component with runtime configuration and fixed TX/RX FIFOs
 
 ## Current Status
 
@@ -18,14 +19,16 @@ starting point for further development.
 
 - SPI slave, frame parser, and router are implemented
 - `pwm_led` is the reference service path
+- `uart` is integrated with `mlr` code generation and generated SDK wrappers
+- UART supports generated default configuration plus MCU-side runtime configuration
+- UART has been validated with Verilator testbenches, functional coverage, and line coverage checks
 - The generated SDK is ready for MCU integration
 - Generated artifacts are written under `tests/build/mlr`
 
 What is still true:
 
 - The framework is not feature-complete
-- The generator currently supports the `pwm_led` component as the reference
-  implementation
+- Component support is being expanded from `pwm_led` and `uart` toward more common peripherals
 - Service IDs are assigned in manifest order during the build
 
 ## Repository Layout
@@ -34,6 +37,8 @@ What is still true:
   - Core RTL blocks: `spi_slave`, `protocol_parse`, `data_router`
 - `components/pwm_led/`
   - Reference component used for end-to-end bring-up
+- `components/uart/`
+  - Generated UART component with runtime configuration, TX/RX FIFOs, SDK wrappers, and Verilator tests
 - `userSpace/manifest.yaml`
   - Source of truth for the current build
 - `mlr/`
@@ -65,38 +70,6 @@ turns that into:
 - MCU SDK headers and source
 - Service ID mapping metadata
 - Quartus project input and bitstream
-
-## Current Wire Protocol
-
-The current frame format is fixed at 6 bytes:
-
-```text
-byte0: server_id
-byte1: payload[31:24]
-byte2: payload[23:16]
-byte3: payload[15:8]
-byte4: payload[7:0]
-byte5: {crc4[7:4], msg_type[3:0]}
-```
-
-Message types:
-
-- `0x0` request
-- `0x1` response
-- `0x2` event
-- `0x3` error
-
-CRC:
-
-- CRC4 uses polynomial `x^4 + x + 1`
-- MSB-first
-- Seed is `0`
-
-The current bring-up SDK keeps a short alignment window between the request
-and the readback half of a single SPI transaction so the response lands on a
-stable byte boundary.
-
-For the canonical format note, see [`docs/frame_format.txt`](docs/frame_format.txt).
 
 ## MCU Integration
 
@@ -142,6 +115,8 @@ The generated SDK exposes:
 - Typed helpers such as `periphx_call_u32`
 - Component-specific wrappers generated from `manifest.yaml`
 
+For UART instances, the generated SDK also exposes a typed runtime configuration API based on `periphx_uart_config_t`, so MCU code can configure baud rate, data bits, parity, and stop bits without manually packing the payload.
+
 ## Build
 
 From the repository root:
@@ -159,12 +134,13 @@ bitstream into:
 
 ## Notes
 
-- The current build is validated around the `pwm_led` reference path.
+- The current build is validated around the `pwm_led` reference path and the generated UART component path.
 - If you change the order of components or services in `manifest.yaml`, the
   generated service IDs will change because IDs are assigned during the build.
 - Generated files live under `tests/build/mlr`; do not edit them by hand.
 - For day-to-day work, treat `userSpace/manifest.yaml` as the build input and
   `tests/build/mlr/` as disposable output.
+- Future development priorities are tracked in [`MLR_TBD.md`](MLR_TBD.md). Current planned directions include IRQ support, a fuller I2C master, GPIO, SPI master, Timer, more tests/CI, and more examples.
 
 ## Contributing
 
