@@ -49,4 +49,23 @@ components:
 
       led_pwm: PIN_1
 
-    
+  - type: uart
+
+      name: uart1
+
+      parameters:
+
+        baudrate: 921600
+
+        data_bits: 8
+
+        parity: none
+
+        stop_bits: 1
+
+      pins:
+
+        rxd: PIN_32
+
+        txd: PIN_33
+
