@@ -7,6 +7,11 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from mlr.codegen.rtl.components.i2c import (
+    emit_i2c_adapter,
+    emit_i2c_instance,
+    i2c_pin_direction,
+)
 from mlr.codegen.rtl.components.pwm_led import (
     emit_pwm_led_adapter,
     emit_pwm_led_instance,
@@ -41,6 +46,8 @@ def write_generated_rtl(spec: ProjectSpec, path: Path) -> Path:
             lines.extend(emit_pwm_led_adapter())
         elif component_type == "uart":
             lines.extend(emit_uart_adapter())
+        elif component_type == "i2c":
+            lines.extend(emit_i2c_adapter())
         else:
             raise NotImplementedError(
                 f"component type {component_type!r} is not supported by the current generator"
@@ -67,7 +74,7 @@ def emit_top_module(spec: ProjectSpec) -> list[str]:
     ]
     for component in spec.components:
         for pin_name, port_name in component.pin_port_names.items():
-            direction = "output" if is_output_pin(component, pin_name) else "input"
+            direction = pin_direction(component, pin_name)
             port_lines.append(f"    {direction} wire {port_name},")
 
     if port_lines:
@@ -179,6 +186,8 @@ def emit_top_module(spec: ProjectSpec) -> list[str]:
             lines.extend(emit_pwm_led_instance(spec, component))
         elif component.component_type == "uart":
             lines.extend(emit_uart_instance(spec, component))
+        elif component.component_type == "i2c":
+            lines.extend(emit_i2c_instance(spec, component))
         else:
             raise NotImplementedError(
                 f"component type {component.component_type!r} is not supported by the current generator"
@@ -188,13 +197,23 @@ def emit_top_module(spec: ProjectSpec) -> list[str]:
     lines.append("endmodule")
     return lines
 
+# @brief 判断指定组件引脚在顶层端口中的方向。
+# @param component 组件规格信息。
+# @param pin_name 组件 interface 中的引脚名称。
+# @return Verilog 顶层端口方向：input、output 或 inout。
+def pin_direction(component: ComponentSpec, pin_name: str) -> str:
+    if component.component_type == "pwm_led":
+        return "output" if is_pwm_led_output_pin(pin_name) else "input"
+    if component.component_type == "uart":
+        return "output" if is_uart_output_pin(pin_name) else "input"
+    if component.component_type == "i2c":
+        return i2c_pin_direction(pin_name)
+    return "output"
+
+
 # @brief 判断指定组件引脚在顶层端口中是否为输出方向。
 # @param component 组件规格信息。
 # @param pin_name 组件 interface 中的引脚名称。
-# @return True 表示输出引脚，False 表示输入引脚。
+# @return True 表示输出引脚，False 表示输入或双向引脚。
 def is_output_pin(component: ComponentSpec, pin_name: str) -> bool:
-    if component.component_type == "pwm_led":
-        return is_pwm_led_output_pin(pin_name)
-    if component.component_type == "uart":
-        return is_uart_output_pin(pin_name)
-    return True
+    return pin_direction(component, pin_name) == "output"

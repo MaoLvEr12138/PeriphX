@@ -1,0 +1,10 @@
+components:
+  - type: i2c
+    name: i2c1
+    parameters:
+      clk_div: 250
+      stretch_timeout: 1024
+      buffer_depth: 16
+    pins:
+      i2c_scl: PIN_2
+      i2c_sda: PIN_3

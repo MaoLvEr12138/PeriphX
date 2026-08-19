@@ -155,7 +155,11 @@ _tb_spi_slave_tmp.cpp
 mlr/__pycache__/
 userSpace/dist/
 *.pyc
-/tests/
+/tests/*
+!/tests/
+!/tests/*.py
+/tests/build/
+/tests/i2c/
 
 # User generated project artifacts
 
