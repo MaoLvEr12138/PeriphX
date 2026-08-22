@@ -23,7 +23,7 @@ starting point for further development.
 - UART supports generated default configuration plus MCU-side runtime configuration
 - UART has been validated with Verilator testbenches, functional coverage, and line coverage checks
 - The generated SDK is ready for MCU integration
-- Generated artifacts are written under `tests/build/mlr`
+- Generated artifacts are written under `userSpace/dist`
 
 What is still true:
 
@@ -44,7 +44,7 @@ What is still true:
 - `mlr/`
   - Python generator that reads the manifest and emits RTL / SDK / Quartus
     inputs
-- `tests/build/mlr/`
+- `userSpace/dist/`
   - Generated artifacts; this is the output directory for the current build
 - `docs/frame_format.txt`
   - Canonical frame-format note for the current protocol contract
@@ -54,10 +54,10 @@ What is still true:
 ```mermaid
 flowchart LR
     M["userSpace/manifest.yaml"] --> G["mlr"]
-    G --> RTL["tests/build/mlr/rtl/periphx_generated.v"]
-    G --> SDK["tests/build/mlr/sdk/periphx_sdk.c/.h"]
-    G --> MAP["tests/build/mlr/meta/service_map.json"]
-    G --> SOF["tests/build/mlr/dist/periphx_generated.sof"]
+    G --> RTL["userSpace/dist/rtl/periphx_generated.v"]
+    G --> SDK["userSpace/dist/sdk/periphx_sdk.c/.h"]
+    G --> MAP["userSpace/dist/meta/service_map.json"]
+    G --> SOF["userSpace/dist/periphx_generated.sof"]
     MCU["MCU application"] --> SDK_USE["generated SDK"]
     SDK_USE --> TRANSPORT["platform transport callback"]
     TRANSPORT --> FPGA["spi_slave -> protocol_parse -> data_router -> component"]
@@ -130,16 +130,16 @@ python -m mlr build
 Quartus. `python -m mlr build` performs the full flow and copies the resulting
 bitstream into:
 
-- [`tests/build/mlr/dist/periphx_generated.sof`](tests/build/mlr/dist/periphx_generated.sof)
+- [`userSpace/dist/periphx_generated.sof`](userSpace/dist/periphx_generated.sof)
 
 ## Notes
 
 - The current build is validated around the `pwm_led` reference path and the generated UART component path.
 - If you change the order of components or services in `manifest.yaml`, the
   generated service IDs will change because IDs are assigned during the build.
-- Generated files live under `tests/build/mlr`; do not edit them by hand.
+- Generated files live under `userSpace/dist`; do not edit them by hand.
 - For day-to-day work, treat `userSpace/manifest.yaml` as the build input and
-  `tests/build/mlr/` as disposable output.
+  `userSpace/dist/` as disposable output.
 - Future development priorities are tracked in [`MLR_TBD.md`](MLR_TBD.md). Current planned directions include IRQ support, a fuller I2C master, GPIO, SPI master, Timer, more tests/CI, and more examples.
 
 ## Contributing

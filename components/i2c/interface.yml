@@ -19,7 +19,7 @@ services:
   - name: set_reg_addr
     type: u8
     access: input
-    description: "设置 8-bit 起始寄存器地址"
+    description: "设置 8-bit 起始寄存器地址；0xFF 表示无寄存器字节"
 
   - name: set_length
     type: u8
@@ -34,12 +34,12 @@ services:
   - name: start_write
     type: bool
     access: input
-    description: "启动多字节写事务：START、addr+W、reg、data[0..n-1]、STOP"
+    description: "启动多字节写事务：有寄存器时为 START、addr+W、reg、data[0..n-1]、STOP；reg=0xFF 时省略 reg"
 
   - name: start_read
     type: bool
     access: input
-    description: "启动多字节读事务：START、addr+W、reg、repeated START、addr+R、data[0..n-1]、STOP"
+    description: "启动多字节读事务：有寄存器时为 START、addr+W、reg、repeated START、addr+R、data[0..n-1]、STOP；reg=0xFF 时省略 reg"
 
   - name: pop_read_data
     type: u8

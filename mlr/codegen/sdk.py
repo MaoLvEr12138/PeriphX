@@ -546,6 +546,8 @@ def emit_i2c_type_declarations() -> list[str]:
         "#define PERIPHX_I2C_RESP_FULL              3u",
         "#define PERIPHX_I2C_RESP_EMPTY             4u",
         "",
+        "#define PERIPHX_I2C_NO_REG_ADDR             0xFFu",
+        "",
         "typedef struct {",
         "    uint32_t clk_div;",
         "    uint32_t stretch_timeout;",

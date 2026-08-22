@@ -13,6 +13,11 @@ from pathlib import Path
 
 PROJECT_NAME = "periphx_generated"
 
+
+def is_generated_adapter_rtl(component_type: str, rtl_file: Path) -> bool:
+    return rtl_file.name == f"periphx_{component_type}_adapter.v"
+
+
 # @brief 执行当前构建入口使用的 Altera Quartus 编译流程。
 # @param spec 规范化后的工程配置、组件和服务信息。
 # @param generated_rtl 已生成的顶层 RTL 文件路径。
@@ -71,6 +76,8 @@ def write_quartus_script(spec, generated_rtl: Path, tcl_path: Path, quartus_dir:
     for component in spec.components:
         rtl_dir = repo_root / "components" / component.component_type / "rtl"
         for rtl_file in sorted(rtl_dir.glob("*.v")):
+            if is_generated_adapter_rtl(component.component_type, rtl_file):
+                continue
             verilog_files.append(rtl_file)
     verilog_files.append(generated_rtl)
 
@@ -188,8 +195,7 @@ def run_quartus(eda_exe: Path, tcl_path: Path, quartus_dir: Path) -> None:
         print(f"[ERROR] Quartus compile failed with exit code {process.returncode}")
         return
 
-    dist_dir = quartus_dir.parent / "dist"
-    dist_dir.mkdir(parents=True, exist_ok=True)
+    dist_dir = quartus_dir.parent
     src_sof = quartus_dir / "output_files" / f"{PROJECT_NAME}.sof"
     if src_sof.exists():
         shutil.copy(src_sof, dist_dir / f"{PROJECT_NAME}.sof")

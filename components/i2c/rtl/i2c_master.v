@@ -58,6 +58,9 @@ localparam [1:0] BYTE_REG    = 2'd1;
 localparam [1:0] BYTE_DATA   = 2'd2;
 localparam [1:0] BYTE_ADDR_R = 2'd3;
 
+// 0xFF is reserved for transactions that do not have a register byte.
+localparam [7:0] NO_REG_ADDR  = 8'hFF;
+
 localparam [3:0] ERR_NONE             = 4'd0;
 localparam [3:0] ERR_ADDR_WRITE_NACK  = 4'd1;
 localparam [3:0] ERR_REG_ADDR_NACK    = 4'd2;
@@ -332,10 +335,22 @@ always @(posedge clk or negedge rst_n) begin
                     sda_drive_low <= 1'b0;
                     case(byte_phase)
                         BYTE_ADDR_W: begin
-                            tx_byte <= reg_addr_r;
-                            bit_index <= 3'd7;
-                            byte_phase <= BYTE_REG;
-                            state <= ST_BIT_SETUP;
+                            if(reg_addr_r == NO_REG_ADDR) begin
+                                if(rw_r) begin
+                                    state <= ST_RESTART_PREP;
+                                end else begin
+                                    byte_index <= 4'd0;
+                                    tx_byte <= get_tx_byte(tx_data_r, 4'd0);
+                                    bit_index <= 3'd7;
+                                    byte_phase <= BYTE_DATA;
+                                    state <= ST_BIT_SETUP;
+                                end
+                            end else begin
+                                tx_byte <= reg_addr_r;
+                                bit_index <= 3'd7;
+                                byte_phase <= BYTE_REG;
+                                state <= ST_BIT_SETUP;
+                            end
                         end
 
                         BYTE_REG: begin

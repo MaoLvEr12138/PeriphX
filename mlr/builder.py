@@ -13,10 +13,9 @@ from mlr.vendors.altera.quartus import run_legacy_quartus_flow, run_quartus_flow
 
 # @brief 计算 mlr 构建产物的默认输出根目录。
 # @param workspace_dir userSpace 工作目录路径。
-# @return tests/build/mlr 输出根目录路径。
+# @return userSpace/dist 输出根目录路径。
 def _mlr_output_root(workspace_dir: Path) -> Path:
-    repo_root = workspace_dir.parent
-    return repo_root / "tests" / "build" / "mlr"
+    return workspace_dir / "dist"
 
 # @brief 从工作区 manifest 生成 PeriphX 产物，并按需执行 Quartus 流程。
 # @param workspace_dir userSpace 工作目录路径。

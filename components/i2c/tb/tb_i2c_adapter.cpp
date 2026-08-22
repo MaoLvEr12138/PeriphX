@@ -361,6 +361,40 @@ public:
         WaitStop();
     }
 
+    void ExpectWriteNoRegisterTransaction(uint8_t dev_addr,
+                                           const std::array<uint8_t, 16> &data,
+                                           uint8_t length)
+    {
+        WaitStart();
+        ExpectEq("no-register write address byte", ReceiveByte(),
+                 static_cast<uint8_t>((dev_addr << 1U) | 0U));
+        DriveAck();
+        for(uint8_t i = 0U; i < length; ++i) {
+            ExpectEq("no-register write data byte", ReceiveByte(), data[i]);
+            DriveAck();
+        }
+        WaitStop();
+    }
+
+    void ExpectReadNoRegisterTransaction(uint8_t dev_addr,
+                                          const std::array<uint8_t, 16> &data,
+                                          uint8_t length)
+    {
+        WaitStart();
+        ExpectEq("no-register read address write byte", ReceiveByte(),
+                 static_cast<uint8_t>((dev_addr << 1U) | 0U));
+        DriveAck();
+        WaitStart();
+        ExpectEq("no-register read address read byte", ReceiveByte(),
+                 static_cast<uint8_t>((dev_addr << 1U) | 1U));
+        DriveAck();
+        for(uint8_t i = 0U; i < length; ++i) {
+            const bool expect_ack = (i != static_cast<uint8_t>(length - 1U));
+            SendByteAndCheckMasterAck(data[i], expect_ack);
+        }
+        WaitStop();
+    }
+
     void ExpectNackAtAddressWrite(uint8_t dev_addr)
     {
         WaitStart();
@@ -1143,6 +1177,31 @@ void TestBadMessageTypeNoStateChange(I2cAdapterSim &sim)
     sim.WaitDoneStatus();
 }
 
+void TestNoRegisterTransactions(I2cAdapterSim &sim)
+{
+    sim.ClearStatus(0U);
+    sim.ConfigureTransfer(0x23U, 0xFFU, 2U);
+    sim.PushWriteData(0x01U, RESP_OK);
+    sim.PushWriteData(0x10U, RESP_OK);
+    sim.StartWrite(RESP_OK);
+    std::array<uint8_t, 16> write_data{};
+    write_data[0] = 0x01U;
+    write_data[1] = 0x10U;
+    sim.ExpectWriteNoRegisterTransaction(0x23U, write_data, 2U);
+    sim.WaitDoneStatus();
+
+    sim.ClearStatus(0U);
+    sim.ConfigureTransfer(0x23U, 0xFFU, 2U);
+    sim.StartRead(RESP_OK);
+    std::array<uint8_t, 16> read_data{};
+    read_data[0] = 0x12U;
+    read_data[1] = 0x34U;
+    sim.ExpectReadNoRegisterTransaction(0x23U, read_data, 2U);
+    sim.WaitDoneStatus();
+    sim.PopReadDataExpect(0x12U);
+    sim.PopReadDataExpect(0x34U);
+}
+
 } // namespace
 
 int main(int argc, char **argv)
@@ -1163,9 +1222,10 @@ int main(int argc, char **argv)
     TestLengthsAndFinalReadNack(sim);
     TestExceptionsReleaseAndRecover(sim);
     TestBadMessageTypeNoStateChange(sim);
+    TestNoRegisterTransactions(sim);
 
     VerilatedCov::write("tests/build/verilator/i2c_adapter/coverage.dat");
-    std::printf("FUNCTIONAL_COVERAGE: 18/18\n");
+    std::printf("FUNCTIONAL_COVERAGE: 20/20\n");
     std::printf("PASS: periphx_i2c_adapter_v2\n");
     return 0;
 }

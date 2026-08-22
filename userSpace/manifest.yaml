@@ -49,23 +49,20 @@ components:
 
       led_pwm: PIN_1
 
-  - type: uart
+  - type: i2c
 
-      name: uart1
+      name: i2c1
 
       parameters:
 
-        baudrate: 921600
+        clk_div: 250
 
-        data_bits: 8
+        stretch_timeout: 1024
 
-        parity: none
-
-        stop_bits: 1
+        buffer_depth: 16
 
       pins:
 
-        rxd: PIN_32
-
-        txd: PIN_33
-
+        i2c_scl: PIN_30
+        
+        i2c_sda: PIN_31

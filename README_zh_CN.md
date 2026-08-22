@@ -22,7 +22,7 @@ PeriphX 是面向 MCU 开发者的可配置 FPGA 外设框架。
 - UART 支持 manifest 默认配置和 MCU 侧运行时配置
 - UART 已通过 Verilator testbench、功能覆盖率和行覆盖率检查验证
 - 生成的 SDK 已经可以给 MCU 端接入
-- 所有生成物都放在 `tests/build/mlr`
+- 所有生成物都放在 `userSpace/dist`
 
 还需要说明的是：
 
@@ -42,7 +42,7 @@ PeriphX 是面向 MCU 开发者的可配置 FPGA 外设框架。
   - 当前构建的唯一输入源
 - `mlr/`
   - Python 生成器，负责读取 manifest 并生成 RTL / SDK / Quartus 输入
-- `tests/build/mlr/`
+- `userSpace/dist/`
   - 构建输出目录；这里面的内容都是生成物
 - `docs/frame_format.txt`
   - 当前协议帧格式的说明
@@ -52,10 +52,10 @@ PeriphX 是面向 MCU 开发者的可配置 FPGA 外设框架。
 ```mermaid
 flowchart LR
     M["userSpace/manifest.yaml"] --> G["mlr"]
-    G --> RTL["tests/build/mlr/rtl/periphx_generated.v"]
-    G --> SDK["tests/build/mlr/sdk/periphx_sdk.c/.h"]
-    G --> MAP["tests/build/mlr/meta/service_map.json"]
-    G --> SOF["tests/build/mlr/dist/periphx_generated.sof"]
+    G --> RTL["userSpace/dist/rtl/periphx_generated.v"]
+    G --> SDK["userSpace/dist/sdk/periphx_sdk.c/.h"]
+    G --> MAP["userSpace/dist/meta/service_map.json"]
+    G --> SOF["userSpace/dist/periphx_generated.sof"]
     MCU["MCU 应用"] --> SDK_USE["生成的 SDK"]
     SDK_USE --> TRANSPORT["平台侧传输回调"]
     TRANSPORT --> FPGA["spi_slave -> protocol_parse -> data_router -> component"]
@@ -124,15 +124,15 @@ python -m mlr build
 `--generate-only` 只生成 RTL、SDK 和服务映射，不调用 Quartus。`python -m mlr build`
 会执行完整流程，并把 bitstream 复制到：
 
-- [`tests/build/mlr/dist/periphx_generated.sof`](tests/build/mlr/dist/periphx_generated.sof)
+- [`userSpace/dist/periphx_generated.sof`](userSpace/dist/periphx_generated.sof)
 
 ## 说明
 
 - 当前基线已经围绕 `pwm_led` 参考路径和生成式 UART 组件路径验证。
 - 如果你修改了 `manifest.yaml` 里组件或服务的顺序，重新生成后服务 ID 会变化，
   因为 ID 是构建时分配的。
-- 所有生成文件都放在 `tests/build/mlr`，不要手改。
-- 日常开发时，把 `userSpace/manifest.yaml` 当作输入，把 `tests/build/mlr/` 当作可丢弃输出。
+- 所有生成文件都放在 `userSpace/dist`，不要手改。
+- 日常开发时，把 `userSpace/manifest.yaml` 当作输入，把 `userSpace/dist/` 当作可丢弃输出。
 - 后续开发优先级记录在 [`MLR_TBD.md`](MLR_TBD.md)。当前方向包括 IRQ 机制、更完整的 I2C master、GPIO、SPI master、Timer、更多测试/CI 和更多 example。
 
 ## 联系
